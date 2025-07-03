@@ -5,6 +5,7 @@ import cors from "cors";
 import { BASE_PROMPT, getSystemPrompt } from "./Prompts";
 
 const app = express();
+app.use(express.json());
 
 const allowedOrigins = [
   'http://localhost:5173',
@@ -27,7 +28,7 @@ app.use(cors({
   allowedHeaders: ['Content-Type']
 }));
 
-app.use(express.json());
+
 
 const genAI = new GoogleGenerativeAI(process.env.Gemini_API_KEY!);
 const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
