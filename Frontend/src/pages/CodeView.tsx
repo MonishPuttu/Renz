@@ -4,11 +4,13 @@ import Editor from '@monaco-editor/react';
 import axios from 'axios';
 import { BuildStep, Step } from '../Types';
 import { parseXml } from '../XmlPraser/Praser';
-import { BACKEND_URL } from '../Types/config';
+//import { BACKEND_URL } from '../Types/config';
 import { useSelector } from 'react-redux';
 import { RootState } from '../Redux/Store';
 import FileExplorer from '../components/FileExplorer';
 import { useNavigate } from 'react-router-dom';
+
+const BACKEND_URL = import.meta.env.BACKEND_URL || 'http://localhost:3000';
 
 function BuildView() {
   const navigate = useNavigate();
