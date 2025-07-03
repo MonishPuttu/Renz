@@ -10,7 +10,11 @@ import { RootState } from '../Redux/Store';
 import FileExplorer from '../components/FileExplorer';
 import { useNavigate } from 'react-router-dom';
 
-const BACKEND_URL = import.meta.env.BACKEND_URL || 'http://localhost:3000';
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
+
+if (!BACKEND_URL) {
+  console.error('Missing VITE_BACKEND_URL, check your environment variables.');
+}
 
 function BuildView() {
   const navigate = useNavigate();
