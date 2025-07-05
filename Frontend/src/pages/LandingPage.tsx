@@ -71,7 +71,7 @@ function LandingPage() {
               <Bot className="w-24 h-24 text-yellow-500 mx-auto relative animate-bounce" />
             </div>
             <h1 className="text-5xl font-bold bg-gradient-to-r from-yellow-500 to-yellow-600 bg-clip-text text-transparent">
-              Welcome to Bolt
+              Welcome to Renz
             </h1>
             <p className="text-gray-400 text-xl max-w-2xl mx-auto">
               Your expert AI assistant for building amazing web applications. Transform your ideas into reality with just a few words.

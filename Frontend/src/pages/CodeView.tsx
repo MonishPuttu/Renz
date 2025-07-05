@@ -174,7 +174,7 @@ function BuildView() {
             className="flex items-center gap-2 hover:text-gray-300 transition-colors duration-200"
           >
             <Zap className="w-6 h-6 text-yellow-500" />
-            <span className="font-bold text-xl">Bolt</span>
+            <span className="font-bold text-xl">Renz</span>
           </button>
         </div>
         <div className="flex-1 p-4 space-y-3 overflow-y-auto">
