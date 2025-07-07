@@ -24,10 +24,24 @@ app.use(cors({
     }
   },
   credentials: true,
-  methods: ['GET', 'POST'],
+  methods: ['GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type','Authorization', 'Accept']
 }));
 
+// Required to handle preflight requests (OPTIONS) for Render
+app.options('*', cors({
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+}));
 
 
 const genAI = new GoogleGenerativeAI(process.env.Gemini_API_KEY!);
