@@ -57,6 +57,3 @@ cd Backend
 npm install
 npm start
 ```
-
-If you want, I can generate **GIFs, diagrams, or SVG badges** tailored to the actual features of your app! 🚀
-::contentReference[oaicite:3]{index=3}
