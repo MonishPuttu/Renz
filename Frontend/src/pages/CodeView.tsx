@@ -414,12 +414,16 @@ function BuildView() {
         initialPromptsRef.current = prompts;
         sessionIdRef.current = sessionId;
 
-        await axios.post(`${BACKEND_URL}/chat`, {
-          sessionId,
-          message: [...prompts, prompt].map(
-            (content: string): ChatMsg => ({ parts: content }),
-          ),
-        }, { headers: authHeaders() });
+        await axios.post(
+          `${BACKEND_URL}/chat`,
+          {
+            sessionId,
+            message: [...prompts, prompt].map(
+              (content: string): ChatMsg => ({ parts: content }),
+            ),
+          },
+          { headers: authHeaders() },
+        );
 
         startStreaming();
       } catch (err) {
@@ -477,12 +481,16 @@ function BuildView() {
 
       allParts.push(text);
 
-      await axios.post(`${BACKEND_URL}/chat`, {
-        sessionId: sessionIdRef.current,
-        message: allParts.map(
-          (content: string): ChatMsg => ({ parts: content }),
-        ),
-      }, { headers: authHeaders() });
+      await axios.post(
+        `${BACKEND_URL}/chat`,
+        {
+          sessionId: sessionIdRef.current,
+          message: allParts.map(
+            (content: string): ChatMsg => ({ parts: content }),
+          ),
+        },
+        { headers: authHeaders() },
+      );
 
       startStreaming();
     } catch (err) {

@@ -141,14 +141,17 @@ function getSession(sessionId: string): Session | null {
 }
 
 /** Periodic cleanup of expired sessions (every 5 minutes) */
-setInterval(() => {
-  const now = Date.now();
-  for (const [id, session] of sessions) {
-    if (now - session.createdAt > SESSION_TTL_MS) {
-      sessions.delete(id);
+setInterval(
+  () => {
+    const now = Date.now();
+    for (const [id, session] of sessions) {
+      if (now - session.createdAt > SESSION_TTL_MS) {
+        sessions.delete(id);
+      }
     }
-  }
-}, 5 * 60 * 1000);
+  },
+  5 * 60 * 1000,
+);
 
 // ────────────────────────────────────────────────────────────────
 // Full-response XML parser (fallback for when streaming parser
@@ -297,7 +300,9 @@ app.post(
   authMiddleware,
   async (
     req: Request<{}, TemplateResponse, TemplateRequest>,
-    res: Response<TemplateResponse | { error: string; message?: string; sessionId?: string }>,
+    res: Response<
+      TemplateResponse | { error: string; message?: string; sessionId?: string }
+    >,
   ): Promise<void> => {
     const { prompt } = req.body;
 
@@ -307,7 +312,11 @@ app.post(
     }
 
     if (prompt.length > MAX_PROMPT_LENGTH) {
-      res.status(400).json({ error: `Prompt too long. Maximum ${MAX_PROMPT_LENGTH} characters.` });
+      res
+        .status(400)
+        .json({
+          error: `Prompt too long. Maximum ${MAX_PROMPT_LENGTH} characters.`,
+        });
       return;
     }
 
@@ -371,10 +380,16 @@ app.post(
   "/chat",
   authMiddleware,
   async (
-    req: Request<{}, { success: boolean } | { error: string }, ChatRequest & { sessionId?: string }>,
+    req: Request<
+      {},
+      { success: boolean } | { error: string },
+      ChatRequest & { sessionId?: string }
+    >,
     res: Response,
   ): Promise<void> => {
-    const { message, sessionId } = req.body as ChatRequest & { sessionId?: string };
+    const { message, sessionId } = req.body as ChatRequest & {
+      sessionId?: string;
+    };
 
     if (!sessionId || typeof sessionId !== "string") {
       res.status(400).json({ error: "Missing or invalid sessionId" });
@@ -383,7 +398,12 @@ app.post(
 
     const session = getSession(sessionId);
     if (!session) {
-      res.status(404).json({ error: "Session not found or expired. Please start a new conversation." });
+      res
+        .status(404)
+        .json({
+          error:
+            "Session not found or expired. Please start a new conversation.",
+        });
       return;
     }
 
@@ -414,7 +434,11 @@ app.post(
     // Validate total message size
     const totalLength = message.reduce((sum, msg) => sum + msg.parts.length, 0);
     if (totalLength > MAX_MESSAGE_PARTS_LENGTH) {
-      res.status(400).json({ error: `Message content too large. Maximum ${MAX_MESSAGE_PARTS_LENGTH} characters total.` });
+      res
+        .status(400)
+        .json({
+          error: `Message content too large. Maximum ${MAX_MESSAGE_PARTS_LENGTH} characters total.`,
+        });
       return;
     }
 
@@ -430,132 +454,37 @@ app.post(
 // as SSE events through the XML parser. Uses conversation memory.
 // ────────────────────────────────────────────────────────────────
 
-app.get("/chat", authMiddleware, async (req: Request, res: Response): Promise<void> => {
-  const sessionId = req.query.sessionId as string;
+app.get(
+  "/chat",
+  authMiddleware,
+  async (req: Request, res: Response): Promise<void> => {
+    const sessionId = req.query.sessionId as string;
 
-  if (!sessionId) {
-    res.status(400).json({ error: "Missing sessionId query parameter" });
-    return;
-  }
-
-  const session = getSession(sessionId);
-  if (!session || !session.messages.length) {
-    res.status(400).json({ error: "No message to process or session expired." });
-    return;
-  }
-
-  res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache");
-  res.setHeader("Connection", "keep-alive");
-
-  // Keep connection alive
-  const keepAlive = setInterval(() => {
-    res.write(": keep-alive\n\n");
-  }, 15000);
-
-  try {
-    // Build conversation messages for memory-based streaming
-    const messages: LLMChatMessage[] = [
-      { role: "system", content: getSystemPrompt() },
-      ...session.messages.map(
-        (msg): LLMChatMessage => ({
-          role: "user",
-          content: msg.parts,
-        }),
-      ),
-    ];
-
-    const xmlParser = new StreamingXMLParser();
-
-    console.log("🚀 Starting streaming request to Ollama…");
-
-    let chunkCount = 0;
-    let fullResponse = "";
-    const emittedPaths = new Set<string>(); // track paths the streaming parser completed
-
-    // Maximum continuation attempts to prevent infinite loops
-    const MAX_CONTINUATIONS = 3;
-    let continuationCount = 0;
-
-    /**
-     * Checks whether the response looks incomplete
-     * (opened a <boltArtifact> but never closed it).
-     */
-    function isResponseIncomplete(text: string): boolean {
-      const openTags = (text.match(/<boltArtifact\b/g) || []).length;
-      const closeTags = (text.match(/<\/boltArtifact>/g) || []).length;
-      return openTags > closeTags;
+    if (!sessionId) {
+      res.status(400).json({ error: "Missing sessionId query parameter" });
+      return;
     }
 
-    /**
-     * Stream tokens from the given async generator, accumulating into fullResponse
-     * and routing through the XML parser + SSE writer.
-     */
-    async function streamTokens(
-      tokenSource: AsyncGenerator<string, void, undefined>,
-    ) {
-      for await (const token of tokenSource) {
-        try {
-          chunkCount++;
-          fullResponse += token;
-
-          // Parse streaming content through XML parser
-          const results = xmlParser.addChunk(token);
-
-          if (results.length > 0) {
-            for (const result of results) {
-              if (result.type === "chunk") {
-                res.write(
-                  `data: ${JSON.stringify({
-                    type: "chunk",
-                    ...result.data,
-                  })}\n\n`,
-                );
-              } else if (result.type === "complete") {
-                const path =
-                  (result.data as any).path ||
-                  (result.data as any).filePath ||
-                  "";
-                if (path) emittedPaths.add(path);
-                res.write(
-                  `data: ${JSON.stringify({
-                    type: "complete",
-                    artifact: result.data,
-                  })}\n\n`,
-                );
-              }
-            }
-          } else {
-            // Send raw text token so frontend sees progress
-            res.write(
-              `data: ${JSON.stringify({
-                type: "text",
-                content: token,
-              })}\n\n`,
-            );
-          }
-        } catch (chunkError) {
-          console.error("❌ Error processing chunk:", chunkError);
-          continue;
-        }
-      }
+    const session = getSession(sessionId);
+    if (!session || !session.messages.length) {
+      res
+        .status(400)
+        .json({ error: "No message to process or session expired." });
+      return;
     }
 
-    // Initial streaming pass
-    await streamTokens(chatWithMemoryStream(messages));
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
 
-    // Auto-continuation: if the response is incomplete, send CONTINUE_PROMPT
-    while (
-      isResponseIncomplete(fullResponse) &&
-      continuationCount < MAX_CONTINUATIONS
-    ) {
-      continuationCount++;
-      console.log(
-        `🔄 Response incomplete — sending continuation ${continuationCount}/${MAX_CONTINUATIONS}…`,
-      );
+    // Keep connection alive
+    const keepAlive = setInterval(() => {
+      res.write(": keep-alive\n\n");
+    }, 15000);
 
-      // Build continuation messages: original context + what was generated so far + continue instruction
-      const continuationMessages: LLMChatMessage[] = [
+    try {
+      // Build conversation messages for memory-based streaming
+      const messages: LLMChatMessage[] = [
         { role: "system", content: getSystemPrompt() },
         ...session.messages.map(
           (msg): LLMChatMessage => ({
@@ -563,54 +492,155 @@ app.get("/chat", authMiddleware, async (req: Request, res: Response): Promise<vo
             content: msg.parts,
           }),
         ),
-        { role: "assistant", content: fullResponse },
-        { role: "user", content: CONTINUE_PROMPT },
       ];
 
-      await streamTokens(chatWithMemoryStream(continuationMessages));
-    }
+      const xmlParser = new StreamingXMLParser();
 
-    if (continuationCount > 0) {
-      console.log(
-        `✅ Completed after ${continuationCount} continuation(s). Total tokens: ${chunkCount}`,
-      );
-    }
+      console.log("🚀 Starting streaming request to Ollama…");
 
-    // After streaming is done, parse the full response for any
-    // artifacts the streaming XML parser missed (deduplicate by path)
-    const fullArtifacts = parseFullResponse(fullResponse);
-    for (const artifact of fullArtifacts) {
-      if (!emittedPaths.has(artifact.path)) {
-        emittedPaths.add(artifact.path);
-        res.write(
-          `data: ${JSON.stringify({
-            type: "complete",
-            artifact,
-          })}\n\n`,
+      let chunkCount = 0;
+      let fullResponse = "";
+      const emittedPaths = new Set<string>(); // track paths the streaming parser completed
+
+      // Maximum continuation attempts to prevent infinite loops
+      const MAX_CONTINUATIONS = 3;
+      let continuationCount = 0;
+
+      /**
+       * Checks whether the response looks incomplete
+       * (opened a <boltArtifact> but never closed it).
+       */
+      function isResponseIncomplete(text: string): boolean {
+        const openTags = (text.match(/<boltArtifact\b/g) || []).length;
+        const closeTags = (text.match(/<\/boltArtifact>/g) || []).length;
+        return openTags > closeTags;
+      }
+
+      /**
+       * Stream tokens from the given async generator, accumulating into fullResponse
+       * and routing through the XML parser + SSE writer.
+       */
+      async function streamTokens(
+        tokenSource: AsyncGenerator<string, void, undefined>,
+      ) {
+        for await (const token of tokenSource) {
+          try {
+            chunkCount++;
+            fullResponse += token;
+
+            // Parse streaming content through XML parser
+            const results = xmlParser.addChunk(token);
+
+            if (results.length > 0) {
+              for (const result of results) {
+                if (result.type === "chunk") {
+                  res.write(
+                    `data: ${JSON.stringify({
+                      type: "chunk",
+                      ...result.data,
+                    })}\n\n`,
+                  );
+                } else if (result.type === "complete") {
+                  const path =
+                    (result.data as any).path ||
+                    (result.data as any).filePath ||
+                    "";
+                  if (path) emittedPaths.add(path);
+                  res.write(
+                    `data: ${JSON.stringify({
+                      type: "complete",
+                      artifact: result.data,
+                    })}\n\n`,
+                  );
+                }
+              }
+            } else {
+              // Send raw text token so frontend sees progress
+              res.write(
+                `data: ${JSON.stringify({
+                  type: "text",
+                  content: token,
+                })}\n\n`,
+              );
+            }
+          } catch (chunkError) {
+            console.error("❌ Error processing chunk:", chunkError);
+            continue;
+          }
+        }
+      }
+
+      // Initial streaming pass
+      await streamTokens(chatWithMemoryStream(messages));
+
+      // Auto-continuation: if the response is incomplete, send CONTINUE_PROMPT
+      while (
+        isResponseIncomplete(fullResponse) &&
+        continuationCount < MAX_CONTINUATIONS
+      ) {
+        continuationCount++;
+        console.log(
+          `🔄 Response incomplete — sending continuation ${continuationCount}/${MAX_CONTINUATIONS}…`,
+        );
+
+        // Build continuation messages: original context + what was generated so far + continue instruction
+        const continuationMessages: LLMChatMessage[] = [
+          { role: "system", content: getSystemPrompt() },
+          ...session.messages.map(
+            (msg): LLMChatMessage => ({
+              role: "user",
+              content: msg.parts,
+            }),
+          ),
+          { role: "assistant", content: fullResponse },
+          { role: "user", content: CONTINUE_PROMPT },
+        ];
+
+        await streamTokens(chatWithMemoryStream(continuationMessages));
+      }
+
+      if (continuationCount > 0) {
+        console.log(
+          `✅ Completed after ${continuationCount} continuation(s). Total tokens: ${chunkCount}`,
         );
       }
+
+      // After streaming is done, parse the full response for any
+      // artifacts the streaming XML parser missed (deduplicate by path)
+      const fullArtifacts = parseFullResponse(fullResponse);
+      for (const artifact of fullArtifacts) {
+        if (!emittedPaths.has(artifact.path)) {
+          emittedPaths.add(artifact.path);
+          res.write(
+            `data: ${JSON.stringify({
+              type: "complete",
+              artifact,
+            })}\n\n`,
+          );
+        }
+      }
+
+      res.write("data: [DONE]\n\n");
+      res.end();
+    } catch (error) {
+      console.error("❌ Streaming error:", error);
+
+      res.write(
+        `data: ${JSON.stringify({
+          type: "error",
+          error: "Generation failed",
+          message: error instanceof Error ? error.message : "Unknown error",
+        })}\n\n`,
+      );
+
+      res.write("data: [DONE]\n\n");
+      res.end();
+    } finally {
+      clearInterval(keepAlive);
+      console.log("🧹 Cleaned up streaming connection");
     }
-
-    res.write("data: [DONE]\n\n");
-    res.end();
-  } catch (error) {
-    console.error("❌ Streaming error:", error);
-
-    res.write(
-      `data: ${JSON.stringify({
-        type: "error",
-        error: "Generation failed",
-        message: error instanceof Error ? error.message : "Unknown error",
-      })}\n\n`,
-    );
-
-    res.write("data: [DONE]\n\n");
-    res.end();
-  } finally {
-    clearInterval(keepAlive);
-    console.log("🧹 Cleaned up streaming connection");
-  }
-});
+  },
+);
 
 // ────────────────────────────────────────────────────────────────
 // Health check
@@ -628,8 +658,12 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📡 Health check: http://localhost:${PORT}/health`);
-  console.log(`🦙 Ollama endpoint: ${process.env.OLLAMA_BASE_URL || "http://localhost:11434"}`);
+  console.log(
+    `🦙 Ollama endpoint: ${process.env.OLLAMA_BASE_URL || "http://localhost:11434"}`,
+  );
   if (!API_KEY) {
-    console.warn("⚠️  No Secret_Api_Key set — API key auth is DISABLED. Set it in .env for production!");
+    console.warn(
+      "⚠️  No Secret_Api_Key set — API key auth is DISABLED. Set it in .env for production!",
+    );
   }
 });
