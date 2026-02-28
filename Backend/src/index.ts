@@ -240,9 +240,9 @@ app.post(
       // Detect app type via a short Ollama completion
       const typeDetectionPrompt = `You must respond with EXACTLY one word: either "react" or "node". No explanation, no punctuation, just one word. User's request: ${prompt}`;
       const rawType = await generateCompletion(typeDetectionPrompt, {
-        num_predict: 10,   // only need a single word back
-        num_ctx: 2048,     // small context is fine for this
-        temperature: 0.1,  // deterministic
+        num_predict: 10, // only need a single word back
+        num_ctx: 2048, // small context is fine for this
+        temperature: 0.1, // deterministic
       });
 
       // Extract just a-z chars and check for react/node anywhere in response

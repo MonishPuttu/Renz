@@ -72,7 +72,8 @@ const PreviewFrame: React.FC<PreviewFrameProps> = ({
     if (t.includes("mounting")) setStatus("mounting");
     else if (t.includes("installing")) setStatus("installing");
     else if (t.includes("starting dev")) setStatus("starting");
-    else if (t.includes("server ready") || t.includes("ready in")) setStatus("ready");
+    else if (t.includes("server ready") || t.includes("ready in"))
+      setStatus("ready");
   }, []);
 
   const launch = useCallback(async () => {
