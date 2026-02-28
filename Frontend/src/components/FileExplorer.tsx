@@ -90,8 +90,8 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
             className={`
               flex items-center py-1 px-2 rounded cursor-pointer transition-colors duration-150
               ${isSelected 
-                ? 'bg-blue-900/30 text-blue-400 border-l-2 border-blue-500' 
-                : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+                ? 'bg-amber-500/10 text-amber-400 border-l-2 border-amber-500' 
+                : 'text-zinc-300 hover:bg-zinc-800/50 hover:text-white'
               }
             `}
             style={{ paddingLeft: `${indent + 8}px` }}
@@ -115,11 +115,11 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
             
             <div className="w-4 h-4 mr-2 flex items-center justify-center">
               {node.isFile ? (
-                <File className="w-3 h-3 text-gray-400" />
+                <File className="w-3 h-3 text-zinc-500" />
               ) : isExpanded ? (
-                <FolderOpen className="w-3 h-3 text-yellow-500" />
+                <FolderOpen className="w-3 h-3 text-amber-500" />
               ) : (
-                <Folder className="w-3 h-3 text-yellow-500" />
+                <Folder className="w-3 h-3 text-amber-500" />
               )}
             </div>
             
@@ -141,7 +141,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
   return (
     <div className="text-sm">
       {fileTree.length === 0 ? (
-        <div className="text-gray-500 p-4 text-center">
+        <div className="text-zinc-500 p-4 text-center">
           <File className="w-8 h-8 mx-auto mb-2 opacity-50" />
           <p>No files to display</p>
         </div>

@@ -2,11 +2,10 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import {
   Code2,
   Eye,
-  Zap,
   Loader2,
   Send,
   MessageSquare,
-  Bot,
+  Sparkles,
   User,
 } from "lucide-react";
 import Editor from "@monaco-editor/react";
@@ -515,12 +514,12 @@ function BuildView() {
     <div className="p-4 space-y-3">
       {[1, 2, 3].map((i) => (
         <div key={i} className="space-y-2">
-          <div className="h-4 bg-gray-700 rounded w-1/2 animate-pulse" />
+          <div className="h-4 bg-zinc-800 rounded w-1/2 animate-pulse" />
           <div className="ml-4 space-y-2">
             {[1, 2].map((j) => (
               <div
                 key={j}
-                className="h-4 bg-gray-700 rounded w-3/4 animate-pulse"
+                className="h-4 bg-zinc-800 rounded w-3/4 animate-pulse"
               />
             ))}
           </div>
@@ -534,19 +533,19 @@ function BuildView() {
   // ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-[#0A0A0A] text-white flex">
+    <div className="min-h-screen bg-[#06060a] text-white flex">
       {/* ──── Chat Sidebar ──── */}
-      <div className="w-80 bg-[#111111] border-r border-gray-800 flex flex-col">
+      <div className="w-80 bg-[#0c0c12] border-r border-zinc-800/60 flex flex-col">
         {/* Header */}
-        <div className="p-4 border-b border-gray-800 flex items-center justify-between">
+        <div className="p-4 border-b border-zinc-800/60 flex items-center justify-between">
           <button
             onClick={() => navigate("/")}
-            className="flex items-center gap-2 hover:text-gray-300 transition-colors duration-200"
+            className="flex items-center gap-2.5 hover:opacity-80 transition-opacity duration-200"
           >
-            <Zap className="w-6 h-6 text-yellow-500" />
-            <span className="font-bold text-xl">Renz</span>
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-amber-400 via-orange-500 to-red-500 flex items-center justify-center font-bold text-xs text-black">R</div>
+            <span className="font-semibold text-lg tracking-tight bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">Renz</span>
           </button>
-          <MessageSquare className="w-4 h-4 text-gray-500" />
+          <MessageSquare className="w-4 h-4 text-zinc-600" />
         </div>
 
         {/* Messages */}
@@ -557,15 +556,15 @@ function BuildView() {
               className={`flex gap-2 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
             >
               {msg.role === "assistant" && (
-                <div className="w-6 h-6 rounded-full bg-yellow-600 flex items-center justify-center flex-shrink-0 mt-1">
-                  <Bot className="w-3.5 h-3.5" />
+                <div className="w-6 h-6 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center flex-shrink-0 mt-1">
+                  <Sparkles className="w-3 h-3 text-black" />
                 </div>
               )}
               <div
-                className={`max-w-[85%] rounded-lg px-3 py-2 text-sm leading-relaxed ${
+                className={`max-w-[85%] rounded-xl px-3 py-2 text-sm leading-relaxed ${
                   msg.role === "user"
-                    ? "bg-yellow-600 text-white"
-                    : "bg-[#1A1A1A] text-gray-300 border border-gray-800"
+                    ? "bg-amber-600 text-white"
+                    : "bg-zinc-900 text-zinc-300 border border-zinc-800/60"
                 }`}
               >
                 <p className="whitespace-pre-wrap break-words">
@@ -575,8 +574,8 @@ function BuildView() {
                 </p>
               </div>
               {msg.role === "user" && (
-                <div className="w-6 h-6 rounded-full bg-gray-600 flex items-center justify-center flex-shrink-0 mt-1">
-                  <User className="w-3.5 h-3.5" />
+                <div className="w-6 h-6 rounded-full bg-zinc-700 flex items-center justify-center flex-shrink-0 mt-1">
+                  <User className="w-3.5 h-3.5 text-zinc-300" />
                 </div>
               )}
             </div>
@@ -585,14 +584,14 @@ function BuildView() {
           {/* Streaming assistant text */}
           {assistantStreamText && (
             <div className="flex gap-2 justify-start">
-              <div className="w-6 h-6 rounded-full bg-yellow-600 flex items-center justify-center flex-shrink-0 mt-1">
-                <Bot className="w-3.5 h-3.5" />
+              <div className="w-6 h-6 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center flex-shrink-0 mt-1">
+                <Sparkles className="w-3 h-3 text-black" />
               </div>
-              <div className="max-w-[85%] rounded-lg px-3 py-2 text-sm leading-relaxed bg-[#1A1A1A] text-gray-300 border border-gray-800">
+              <div className="max-w-[85%] rounded-xl px-3 py-2 text-sm leading-relaxed bg-zinc-900 text-zinc-300 border border-zinc-800/60">
                 <p className="whitespace-pre-wrap break-words">
                   {stripXmlTags(assistantStreamText)}
                 </p>
-                <Loader2 className="w-3 h-3 animate-spin text-yellow-500 mt-1 inline-block" />
+                <Loader2 className="w-3 h-3 animate-spin text-amber-500 mt-1 inline-block" />
               </div>
             </div>
           )}
@@ -600,12 +599,12 @@ function BuildView() {
           {/* Loading indicator */}
           {(isLoading || isSendingChat) && !assistantStreamText && (
             <div className="flex gap-2 justify-start">
-              <div className="w-6 h-6 rounded-full bg-yellow-600 flex items-center justify-center flex-shrink-0 mt-1">
-                <Bot className="w-3.5 h-3.5" />
+              <div className="w-6 h-6 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center flex-shrink-0 mt-1">
+                <Sparkles className="w-3 h-3 text-black" />
               </div>
-              <div className="rounded-lg px-3 py-2 bg-[#1A1A1A] border border-gray-800">
-                <div className="flex items-center gap-2 text-sm text-gray-400">
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-yellow-500" />
+              <div className="rounded-xl px-3 py-2 bg-zinc-900 border border-zinc-800/60">
+                <div className="flex items-center gap-2 text-sm text-zinc-400">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-500" />
                   Generating...
                 </div>
               </div>
@@ -618,7 +617,7 @@ function BuildView() {
         {/* Chat input */}
         <form
           onSubmit={handleChatSubmit}
-          className="p-3 border-t border-gray-800"
+          className="p-3 border-t border-zinc-800/60"
         >
           <div className="flex gap-2">
             <input
@@ -627,14 +626,14 @@ function BuildView() {
               onChange={(e) => setChatInput(e.target.value)}
               placeholder="Ask for changes..."
               disabled={isSendingChat || streamingState.isStreaming}
-              className="flex-1 bg-[#1A1A1A] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-yellow-500 text-white placeholder-gray-500 border border-gray-800 disabled:opacity-50"
+              className="flex-1 bg-zinc-900 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-amber-500/50 text-white placeholder-zinc-600 border border-zinc-800/60 disabled:opacity-50 transition-all"
             />
             <button
               type="submit"
               disabled={
                 !chatInput.trim() || isSendingChat || streamingState.isStreaming
               }
-              className="p-2 bg-yellow-600 rounded-lg hover:bg-yellow-700 transition disabled:opacity-40 disabled:cursor-not-allowed"
+              className="p-2 bg-gradient-to-r from-amber-500 to-orange-600 text-black rounded-xl hover:from-amber-400 hover:to-orange-500 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
             >
               <Send className="w-4 h-4" />
             </button>
@@ -645,12 +644,12 @@ function BuildView() {
       {/* ──── Main Content ──── */}
       <div className="flex-1 flex">
         {/* File Explorer */}
-        <div className="w-64 bg-[#111111] border-r border-gray-800 flex flex-col">
-          <div className="p-4 border-b border-gray-800">
-            <h2 className="text-sm font-semibold text-gray-400">
+        <div className="w-64 bg-[#0c0c12] border-r border-zinc-800/60 flex flex-col">
+          <div className="p-4 border-b border-zinc-800/60">
+            <h2 className="text-sm font-semibold text-zinc-400">
               File Structure
             </h2>
-            <div className="text-xs text-gray-600 mt-1">
+            <div className="text-xs text-zinc-600 mt-1">
               {Object.keys(streamingState.files).length} files
             </div>
           </div>
@@ -671,14 +670,14 @@ function BuildView() {
         {/* Code / Preview */}
         <div className="flex-1 flex flex-col">
           {/* Tab bar */}
-          <div className="border-b border-gray-800 p-2 flex items-center justify-between bg-[#111111]">
+          <div className="border-b border-zinc-800/60 p-2 flex items-center justify-between bg-[#0c0c12]">
             <div className="flex">
               <button
                 onClick={() => setActiveTab("code")}
-                className={`flex items-center gap-2 px-4 py-2 rounded-md transition-colors duration-200 ${
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-200 ${
                   activeTab === "code"
-                    ? "bg-[#1A1A1A] text-white border border-gray-800"
-                    : "text-gray-400 hover:text-white hover:bg-[#1A1A1A]"
+                    ? "bg-zinc-900 text-white border border-zinc-700/50"
+                    : "text-zinc-500 hover:text-white hover:bg-zinc-900/50"
                 }`}
               >
                 <Code2 className="w-4 h-4" />
@@ -686,10 +685,10 @@ function BuildView() {
               </button>
               <button
                 onClick={() => setActiveTab("preview")}
-                className={`flex items-center gap-2 px-4 py-2 rounded-md transition-colors duration-200 ml-2 ${
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-200 ml-2 ${
                   activeTab === "preview"
-                    ? "bg-[#1A1A1A] text-white border border-gray-800"
-                    : "text-gray-400 hover:text-white hover:bg-[#1A1A1A]"
+                    ? "bg-zinc-900 text-white border border-zinc-700/50"
+                    : "text-zinc-500 hover:text-white hover:bg-zinc-900/50"
                 }`}
               >
                 <Eye className="w-4 h-4" />
@@ -698,7 +697,7 @@ function BuildView() {
             </div>
 
             {selectedFilePath && (
-              <div className="flex items-center gap-2 text-sm text-gray-400">
+              <div className="flex items-center gap-2 text-sm text-zinc-500">
                 <span>{selectedFilePath}</span>
                 {streamingState.files[selectedFilePath] &&
                   !streamingState.files[selectedFilePath].isComplete && (

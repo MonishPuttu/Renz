@@ -141,16 +141,16 @@ const PreviewFrame: React.FC<PreviewFrameProps> = ({
   // ─── Render ───────────────────────────────
 
   return (
-    <div className="flex flex-col h-full bg-[#0A0A0A]">
+    <div className="flex flex-col h-full bg-[#06060a]">
       {/* Toolbar */}
-      <div className="flex items-center justify-between px-3 py-2 bg-[#111111] border-b border-gray-800 text-sm">
-        <div className="flex items-center gap-2 text-gray-400">
+      <div className="flex items-center justify-between px-3 py-2 bg-[#0c0c12] border-b border-zinc-800/60 text-sm">
+        <div className="flex items-center gap-2 text-zinc-400">
           {status === "ready" ? (
-            <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
+            <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
           ) : status === "error" ? (
             <span className="inline-block w-2 h-2 rounded-full bg-red-500" />
           ) : status !== "idle" ? (
-            <Loader2 className="w-3.5 h-3.5 animate-spin text-yellow-500" />
+            <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-500" />
           ) : null}
           <span>{statusLabel[status]}</span>
         </div>
@@ -165,7 +165,7 @@ const PreviewFrame: React.FC<PreviewFrameProps> = ({
             disabled={
               isStreaming || status === "booting" || status === "installing"
             }
-            className="p-1.5 rounded hover:bg-gray-800 text-gray-400 hover:text-white disabled:opacity-40 transition"
+            className="p-1.5 rounded hover:bg-zinc-800 text-zinc-400 hover:text-white disabled:opacity-40 transition"
             title="Re-run project"
           >
             {status !== "idle" && status !== "ready" && status !== "error" ? (
@@ -181,7 +181,7 @@ const PreviewFrame: React.FC<PreviewFrameProps> = ({
               href={previewUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="p-1.5 rounded hover:bg-gray-800 text-gray-400 hover:text-white transition"
+              className="p-1.5 rounded hover:bg-zinc-800 text-zinc-400 hover:text-white transition"
               title="Open in new tab"
             >
               <ExternalLink className="w-4 h-4" />
@@ -191,7 +191,7 @@ const PreviewFrame: React.FC<PreviewFrameProps> = ({
           {/* Toggle terminal */}
           <button
             onClick={() => setShowTerminal((v) => !v)}
-            className={`p-1.5 rounded hover:bg-gray-800 transition ${showTerminal ? "text-yellow-500" : "text-gray-400 hover:text-white"}`}
+            className={`p-1.5 rounded hover:bg-zinc-800 transition ${showTerminal ? "text-amber-500" : "text-zinc-400 hover:text-white"}`}
             title="Toggle terminal"
           >
             <Terminal className="w-4 h-4" />
@@ -214,7 +214,7 @@ const PreviewFrame: React.FC<PreviewFrameProps> = ({
             sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
           />
         ) : status === "error" ? (
-          <div className="flex flex-col items-center justify-center h-full gap-4 text-gray-400">
+          <div className="flex flex-col items-center justify-center h-full gap-4 text-zinc-400">
             <div className="text-red-400 text-center max-w-md">
               <p className="text-lg font-medium mb-2">Build failed</p>
               <p className="text-sm">{errorMsg}</p>
@@ -224,21 +224,21 @@ const PreviewFrame: React.FC<PreviewFrameProps> = ({
                 hasRunRef.current = false;
                 launch();
               }}
-              className="flex items-center gap-2 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition"
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-600 text-black font-medium rounded-xl hover:from-amber-400 hover:to-orange-500 transition-all"
             >
               <RefreshCw className="w-4 h-4" />
               Retry
             </button>
           </div>
         ) : status === "idle" && !isStreaming ? (
-          <div className="flex flex-col items-center justify-center h-full gap-4 text-gray-500">
+          <div className="flex flex-col items-center justify-center h-full gap-4 text-zinc-500">
             {Object.keys(fileStructure).length > 0 ? (
               <button
                 onClick={() => {
                   hasRunRef.current = false;
                   launch();
                 }}
-                className="flex items-center gap-2 px-5 py-2.5 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition"
+                className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-amber-500 to-orange-600 text-black font-medium rounded-xl hover:from-amber-400 hover:to-orange-500 transition-all"
               >
                 <Play className="w-4 h-4" />
                 Run Preview
@@ -249,8 +249,8 @@ const PreviewFrame: React.FC<PreviewFrameProps> = ({
           </div>
         ) : (
           /* Loading states */
-          <div className="flex flex-col items-center justify-center h-full gap-3 text-gray-400">
-            <Loader2 className="w-8 h-8 animate-spin text-yellow-500" />
+          <div className="flex flex-col items-center justify-center h-full gap-3 text-zinc-400">
+            <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
             <p className="text-sm">{statusLabel[status]}</p>
           </div>
         )}
@@ -258,7 +258,7 @@ const PreviewFrame: React.FC<PreviewFrameProps> = ({
 
       {/* Terminal panel */}
       {showTerminal && (
-        <div className="h-48 border-t border-gray-800 bg-[#0d0d0d] overflow-y-auto font-mono text-xs p-3">
+        <div className="h-48 border-t border-zinc-800/60 bg-[#08080e] overflow-y-auto font-mono text-xs p-3">
           {logs.map((log, i) => (
             <div
               key={i}
@@ -266,10 +266,10 @@ const PreviewFrame: React.FC<PreviewFrameProps> = ({
                 log.type === "error"
                   ? "text-red-400"
                   : log.type === "stderr"
-                    ? "text-yellow-400"
+                    ? "text-amber-400"
                     : log.type === "info"
                       ? "text-blue-400"
-                      : "text-gray-300"
+                      : "text-zinc-300"
               }`}
             >
               {stripAnsi(log.text)}

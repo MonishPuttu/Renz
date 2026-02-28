@@ -306,17 +306,7 @@ function LandingPage() {
             </div>
           </div>
 
-          {/* Trust bar */}
-          <div className="mt-16 flex items-center justify-center gap-6 text-[11px] text-zinc-700 animate-stagger-7">
-            <span className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500/60"></span>
-              Open Source
-            </span>
-            <span className="w-px h-3 bg-zinc-800"></span>
-            <span>React + Tailwind</span>
-            <span className="w-px h-3 bg-zinc-800"></span>
-            <span>WebContainer Powered</span>
-          </div>
+
         </div>
       </main>
     </div>
