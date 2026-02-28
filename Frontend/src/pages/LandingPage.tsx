@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useDispatch, useSelector } from 'react-redux';
-import { Send, ArrowRight, Sparkles, Command } from 'lucide-react';
-import { RootState } from '../Redux/Store';
-import { setPrompt } from '../Redux/Slice';
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
+import { useDispatch, useSelector } from "react-redux";
+import { Send, ArrowRight, Sparkles, Command } from "lucide-react";
+import { RootState } from "../Redux/Store";
+import { setPrompt } from "../Redux/Slice";
 
 // Floating particles component
 const FloatingParticles = () => {
@@ -39,28 +39,35 @@ const FloatingParticles = () => {
 };
 
 // Smooth typewriter hook with consistent pacing
-function useTypewriter(words: string[], typingSpeed = 60, deletingSpeed = 35, pauseDuration = 2200) {
-  const [displayed, setDisplayed] = useState('');
+function useTypewriter(
+  words: string[],
+  typingSpeed = 60,
+  deletingSpeed = 35,
+  pauseDuration = 2200,
+) {
+  const [displayed, setDisplayed] = useState("");
   const [wordIndex, setWordIndex] = useState(0);
-  const [phase, setPhase] = useState<'typing' | 'pausing' | 'deleting'>('typing');
-  const longestWord = Math.max(...words.map(w => w.length));
+  const [phase, setPhase] = useState<"typing" | "pausing" | "deleting">(
+    "typing",
+  );
+  const longestWord = Math.max(...words.map((w) => w.length));
 
   useEffect(() => {
     const currentWord = words[wordIndex];
 
-    if (phase === 'typing') {
+    if (phase === "typing") {
       if (displayed.length < currentWord.length) {
         const timeout = setTimeout(() => {
           setDisplayed(currentWord.slice(0, displayed.length + 1));
         }, typingSpeed);
         return () => clearTimeout(timeout);
       } else {
-        const timeout = setTimeout(() => setPhase('deleting'), pauseDuration);
+        const timeout = setTimeout(() => setPhase("deleting"), pauseDuration);
         return () => clearTimeout(timeout);
       }
     }
 
-    if (phase === 'deleting') {
+    if (phase === "deleting") {
       if (displayed.length > 0) {
         const timeout = setTimeout(() => {
           setDisplayed(displayed.slice(0, -1));
@@ -68,10 +75,18 @@ function useTypewriter(words: string[], typingSpeed = 60, deletingSpeed = 35, pa
         return () => clearTimeout(timeout);
       } else {
         setWordIndex((prev) => (prev + 1) % words.length);
-        setPhase('typing');
+        setPhase("typing");
       }
     }
-  }, [displayed, phase, wordIndex, words, typingSpeed, deletingSpeed, pauseDuration]);
+  }, [
+    displayed,
+    phase,
+    wordIndex,
+    words,
+    typingSpeed,
+    deletingSpeed,
+    pauseDuration,
+  ]);
 
   return { displayed, longestWord, currentWord: words[wordIndex] };
 }
@@ -85,12 +100,12 @@ function LandingPage() {
   const dispatch = useDispatch();
 
   const rotatingWords = [
-    'a SaaS dashboard',
-    'an e-commerce store',
-    'a portfolio website',
-    'a task manager',
-    'a social media app',
-    'a blog platform',
+    "a SaaS dashboard",
+    "an e-commerce store",
+    "a portfolio website",
+    "a task manager",
+    "a social media app",
+    "a blog platform",
   ];
   const { displayed, longestWord, currentWord } = useTypewriter(rotatingWords);
 
@@ -98,22 +113,25 @@ function LandingPage() {
     setIsVisible(true);
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
         textareaRef.current?.focus();
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  const handleSubmit = useCallback((e: React.FormEvent) => {
-    e.preventDefault();
-    if (prompt.trim()) {
-      setIsVisible(false);
-      setTimeout(() => navigate('/build'), 500);
-    }
-  }, [prompt, navigate]);
+  const handleSubmit = useCallback(
+    (e: React.FormEvent) => {
+      e.preventDefault();
+      if (prompt.trim()) {
+        setIsVisible(false);
+        setTimeout(() => navigate("/build"), 500);
+      }
+    },
+    [prompt, navigate],
+  );
 
   const examples = [
     { text: "Build a real-time chat application with rooms", emoji: "💬" },
@@ -145,7 +163,9 @@ function LandingPage() {
           <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-400 via-orange-500 to-red-500 flex items-center justify-center font-bold text-sm text-black shadow-lg shadow-amber-500/20 group-hover:shadow-amber-500/40 transition-shadow duration-500">
             R
           </div>
-          <span className="text-lg font-semibold tracking-tight bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">Renz</span>
+          <span className="text-lg font-semibold tracking-tight bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">
+            Renz
+          </span>
         </div>
         <div className="flex items-center gap-6">
           <a
@@ -154,7 +174,9 @@ function LandingPage() {
             rel="noreferrer"
             className="text-sm text-zinc-500 hover:text-white transition-colors duration-300 flex items-center gap-2"
           >
-            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
+            </svg>
             GitHub
           </a>
         </div>
@@ -164,7 +186,7 @@ function LandingPage() {
       <main className="flex-1 flex flex-col items-center justify-center px-6 pb-16 relative z-10">
         <div
           className={`max-w-3xl w-full transition-all duration-1000 transform ${
-            isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-12'
+            isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-12"
           }`}
         >
           {/* Hero */}
@@ -180,29 +202,42 @@ function LandingPage() {
               <span className="block animate-stagger-1 text-white">Build</span>
               <span className="block animate-stagger-2 relative mt-3">
                 {/* Invisible text to reserve max width and prevent layout shift */}
-                <span className="invisible" aria-hidden="true">{'x'.repeat(longestWord)}</span>
+                <span className="invisible" aria-hidden="true">
+                  {"x".repeat(longestWord)}
+                </span>
                 <span className="absolute left-1/2 -translate-x-1/2 top-0 whitespace-nowrap">
                   <span className="bg-gradient-to-r from-amber-300 via-orange-400 to-rose-500 bg-clip-text text-transparent animate-gradient-x bg-[length:200%_auto]">
                     {displayed}
                   </span>
-                  <span className="animate-blink text-amber-400 ml-0.5 font-light">|</span>
+                  <span className="animate-blink text-amber-400 ml-0.5 font-light">
+                    |
+                  </span>
                 </span>
               </span>
             </h1>
 
             <p className="text-zinc-500 text-base md:text-lg max-w-xl mx-auto leading-relaxed animate-stagger-4">
-              Describe what you need. Renz writes the code, sets up the project, and gives you a live preview — all in your browser.
+              Describe what you need. Renz writes the code, sets up the project,
+              and gives you a live preview — all in your browser.
             </p>
           </div>
 
           {/* Input */}
           <form onSubmit={handleSubmit} className="mb-10 animate-stagger-5">
-            <div className={`relative group transition-all duration-700 ${isFocused ? 'scale-[1.02]' : ''}`}>
+            <div
+              className={`relative group transition-all duration-700 ${isFocused ? "scale-[1.02]" : ""}`}
+            >
               {/* Glow ring */}
-              <div className={`absolute -inset-px rounded-2xl bg-gradient-to-r from-amber-500/60 via-orange-500/60 to-rose-500/60 blur-sm transition-opacity duration-700 ${isFocused ? 'opacity-100' : 'opacity-0 group-hover:opacity-50'}`}></div>
-              <div className={`absolute -inset-1 rounded-2xl bg-gradient-to-r from-amber-500/20 via-orange-500/20 to-rose-500/20 blur-xl transition-opacity duration-700 ${isFocused ? 'opacity-100' : 'opacity-0'}`}></div>
+              <div
+                className={`absolute -inset-px rounded-2xl bg-gradient-to-r from-amber-500/60 via-orange-500/60 to-rose-500/60 blur-sm transition-opacity duration-700 ${isFocused ? "opacity-100" : "opacity-0 group-hover:opacity-50"}`}
+              ></div>
+              <div
+                className={`absolute -inset-1 rounded-2xl bg-gradient-to-r from-amber-500/20 via-orange-500/20 to-rose-500/20 blur-xl transition-opacity duration-700 ${isFocused ? "opacity-100" : "opacity-0"}`}
+              ></div>
 
-              <div className={`relative bg-[#0e0e14] border rounded-2xl p-1.5 flex items-end gap-1.5 transition-all duration-500 ${isFocused ? 'border-amber-500/30 shadow-2xl shadow-amber-500/5' : 'border-zinc-800/80'}`}>
+              <div
+                className={`relative bg-[#0e0e14] border rounded-2xl p-1.5 flex items-end gap-1.5 transition-all duration-500 ${isFocused ? "border-amber-500/30 shadow-2xl shadow-amber-500/5" : "border-zinc-800/80"}`}
+              >
                 <textarea
                   ref={textareaRef}
                   value={prompt}
@@ -210,7 +245,7 @@ function LandingPage() {
                   onFocus={() => setIsFocused(true)}
                   onBlur={() => setIsFocused(false)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
+                    if (e.key === "Enter" && !e.shiftKey) {
                       e.preventDefault();
                       handleSubmit(e);
                     }
@@ -224,8 +259,8 @@ function LandingPage() {
                     type="submit"
                     className={`p-3 rounded-xl font-semibold flex items-center justify-center shrink-0 transition-all duration-500 ${
                       prompt.trim()
-                        ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-black shadow-lg shadow-amber-500/25 hover:shadow-amber-500/40 hover:scale-105 active:scale-95'
-                        : 'bg-zinc-800/50 text-zinc-600 cursor-not-allowed'
+                        ? "bg-gradient-to-r from-amber-500 to-orange-500 text-black shadow-lg shadow-amber-500/25 hover:shadow-amber-500/40 hover:scale-105 active:scale-95"
+                        : "bg-zinc-800/50 text-zinc-600 cursor-not-allowed"
                     }`}
                     disabled={!prompt.trim()}
                   >
@@ -248,7 +283,9 @@ function LandingPage() {
 
           {/* Examples */}
           <div className="animate-stagger-6">
-            <p className="text-center text-xs text-zinc-600 mb-4 uppercase tracking-widest font-medium">Try an idea</p>
+            <p className="text-center text-xs text-zinc-600 mb-4 uppercase tracking-widest font-medium">
+              Try an idea
+            </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-w-2xl mx-auto">
               {examples.map((example, index) => (
                 <button

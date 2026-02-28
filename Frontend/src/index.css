@@ -4,7 +4,8 @@
 
 /* ===== Aurora background animations ===== */
 @keyframes aurora-1 {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 0.4;
     transform: translateX(-50%) scale(1) translateY(0);
   }
@@ -19,7 +20,8 @@
 }
 
 @keyframes aurora-2 {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 0.3;
     transform: translateX(0) translateY(0);
   }
@@ -30,7 +32,8 @@
 }
 
 @keyframes aurora-3 {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 0.2;
     transform: scale(1);
   }
@@ -88,13 +91,27 @@
   }
 }
 
-.animate-stagger-1 { animation: stagger-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.1s both; }
-.animate-stagger-2 { animation: stagger-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.25s both; }
-.animate-stagger-3 { animation: stagger-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.4s both; }
-.animate-stagger-4 { animation: stagger-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.55s both; }
-.animate-stagger-5 { animation: stagger-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.7s both; }
-.animate-stagger-6 { animation: stagger-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.85s both; }
-.animate-stagger-7 { animation: stagger-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) 1.0s both; }
+.animate-stagger-1 {
+  animation: stagger-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.1s both;
+}
+.animate-stagger-2 {
+  animation: stagger-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.25s both;
+}
+.animate-stagger-3 {
+  animation: stagger-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.4s both;
+}
+.animate-stagger-4 {
+  animation: stagger-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.55s both;
+}
+.animate-stagger-5 {
+  animation: stagger-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.7s both;
+}
+.animate-stagger-6 {
+  animation: stagger-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.85s both;
+}
+.animate-stagger-7 {
+  animation: stagger-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) 1s both;
+}
 
 /* ===== Nav slide down ===== */
 @keyframes slide-down {
@@ -114,8 +131,13 @@
 
 /* ===== Blinking cursor ===== */
 @keyframes blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
 }
 
 .animate-blink {
@@ -124,9 +146,15 @@
 
 /* ===== Gradient text shimmer ===== */
 @keyframes gradient-x {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
 }
 
 .animate-gradient-x {
