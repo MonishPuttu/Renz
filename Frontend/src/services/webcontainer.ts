@@ -22,6 +22,13 @@ export type OutputCallback = (output: TerminalOutput) => void;
 export type UrlCallback = (url: string) => void;
 
 // ────────────────────────────────────────────
+// Constants
+// ────────────────────────────────────────────
+
+const INSTALL_TIMEOUT_MS = 120_000; // 2 minutes for npm install
+const SERVER_READY_TIMEOUT_MS = 30_000; // 30 seconds for dev server to start
+
+// ────────────────────────────────────────────
 // Singleton
 // ────────────────────────────────────────────
 
@@ -72,6 +79,80 @@ export function toFileSystemTree(structure: FileStructure): FileSystemTree {
 }
 
 // ────────────────────────────────────────────
+// Helpers
+// ────────────────────────────────────────────
+
+/** Create a timeout promise that rejects after `ms` milliseconds */
+function timeoutPromise<T>(
+  ms: number,
+  label: string,
+): { promise: Promise<T>; cancel: () => void } {
+  let timer: ReturnType<typeof setTimeout>;
+  const promise = new Promise<T>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`${label} timed out after ${ms / 1000}s`)),
+      ms,
+    );
+  });
+  const cancel = () => clearTimeout(timer);
+  return { promise, cancel };
+}
+
+/**
+ * Consume a process's output stream using a manual reader.
+ * This avoids the pipeTo() deadlock that can occur in WebContainer
+ * where proc.exit won't resolve until the output stream is fully consumed.
+ * Errors are caught and logged rather than propagated.
+ */
+function consumeOutput(
+  output: ReadableStream<string>,
+  onOutput?: OutputCallback,
+  type: "stdout" | "stderr" = "stdout",
+): Promise<void> {
+  const reader = output.getReader();
+
+  async function pump(): Promise<void> {
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value) {
+          onOutput?.({ type, text: value });
+        }
+      }
+    } catch (err) {
+      // Stream may be cancelled during teardown — that's expected
+      const msg = String(err);
+      if (
+        msg.includes("aborted") ||
+        msg.includes("cancel") ||
+        msg.includes("locked")
+      )
+        return;
+      console.warn(`Stream read error (${type}):`, err);
+    } finally {
+      try {
+        reader.releaseLock();
+      } catch {
+        /* already released */
+      }
+    }
+  }
+
+  return pump();
+}
+
+/** Try to extract a URL from stdout text (fallback if server-ready event doesn't fire) */
+function extractUrlFromText(text: string): string | null {
+  // Match common Vite/dev server URL patterns
+  const urlMatch =
+    text.match(
+      /(?:Local|Network|ready at|listening on)[:\s]+(https?:\/\/[^\s]+)/i,
+    ) || text.match(/(https?:\/\/localhost[:\d]*\/?)/i);
+  return urlMatch ? urlMatch[1] : null;
+}
+
+// ────────────────────────────────────────────
 // High-level helpers
 // ────────────────────────────────────────────
 
@@ -84,40 +165,66 @@ export async function mountFiles(
 ): Promise<void> {
   const wc = await getWebContainer();
   const tree = toFileSystemTree(structure);
-  onOutput?.({ type: "info", text: "📂 Mounting files…" });
+  onOutput?.({ type: "info", text: "[mount] Mounting files..." });
   await wc.mount(tree);
-  onOutput?.({ type: "info", text: "✅ Files mounted." });
+  onOutput?.({ type: "info", text: "[mount] Files mounted." });
 }
 
 /**
  * Run `npm install` inside the WebContainer.
  * Streams terminal output via the callback.
- * Returns exit code.
+ * Returns exit code, or throws on timeout.
  */
 export async function installDependencies(
   onOutput?: OutputCallback,
 ): Promise<number> {
   const wc = await getWebContainer();
-  onOutput?.({ type: "info", text: "📦 Installing dependencies…" });
+  onOutput?.({ type: "info", text: "[npm] Installing dependencies..." });
 
-  const proc = await wc.spawn("npm", ["install"]);
+  const proc = await wc.spawn("npm", [
+    "install",
+    "--no-audit",
+    "--no-fund",
+    "--no-progress",
+  ]);
 
-  proc.output.pipeTo(
-    new WritableStream({
-      write(data) {
-        onOutput?.({ type: "stdout", text: data });
-      },
-    }),
+  // Start reading output in background (must happen so proc.exit can resolve)
+  const outputDone = consumeOutput(proc.output, onOutput, "stdout");
+
+  // Race exit vs timeout — both run concurrently with output consumption
+  const { promise: timeout, cancel: cancelTimeout } = timeoutPromise<number>(
+    INSTALL_TIMEOUT_MS,
+    "npm install",
   );
 
-  const exitCode = await proc.exit;
+  let exitCode: number;
+  try {
+    exitCode = await Promise.race([proc.exit, timeout]);
+    cancelTimeout();
+  } catch (err) {
+    cancelTimeout();
+    try {
+      proc.kill();
+    } catch {
+      /* process may have already exited */
+    }
+    onOutput?.({
+      type: "error",
+      text: `[timeout] npm install timed out after ${INSTALL_TIMEOUT_MS / 1000}s`,
+    });
+    throw err;
+  }
+
+  // Give output a short window to flush, then move on regardless
+  await Promise.race([outputDone, new Promise((r) => setTimeout(r, 2000))]);
+
   if (exitCode !== 0) {
     onOutput?.({
       type: "error",
       text: `npm install failed (exit ${exitCode})`,
     });
   } else {
-    onOutput?.({ type: "info", text: "✅ Dependencies installed." });
+    onOutput?.({ type: "info", text: "[npm] Dependencies installed." });
   }
   return exitCode;
 }
@@ -131,27 +238,46 @@ export async function startDevServer(
   onUrl?: UrlCallback,
 ): Promise<() => void> {
   const wc = await getWebContainer();
-  onOutput?.({ type: "info", text: "🚀 Starting dev server…" });
+  onOutput?.({ type: "info", text: "[dev] Starting dev server..." });
 
   const proc = await wc.spawn("npm", ["run", "dev"]);
 
-  proc.output.pipeTo(
-    new WritableStream({
-      write(data) {
-        onOutput?.({ type: "stdout", text: data });
-      },
-    }),
+  let urlResolved = false;
+
+  // Consume output — also try to extract URL from stdout as a fallback
+  consumeOutput(
+    proc.output,
+    (output) => {
+      onOutput?.(output);
+      // Fallback: try to extract URL from stdout in case server-ready doesn't fire
+      if (!urlResolved) {
+        const url = extractUrlFromText(output.text);
+        if (url) {
+          urlResolved = true;
+          onOutput?.({ type: "info", text: `[dev] Server detected at ${url}` });
+          onUrl?.(url);
+        }
+      }
+    },
+    "stdout",
   );
 
-  // WebContainer fires this when the server starts listening
-  wc.on("server-ready", (_port: number, url: string) => {
-    onOutput?.({ type: "info", text: `🌐 Server ready at ${url}` });
+  // Primary: WebContainer fires this when the server starts listening
+  const serverReadyHandler = (_port: number, url: string) => {
+    if (urlResolved) return;
+    urlResolved = true;
+    onOutput?.({ type: "info", text: `[dev] Server ready at ${url}` });
     onUrl?.(url);
-  });
+  };
+
+  wc.on("server-ready", serverReadyHandler);
 
   // Return teardown
   return () => {
     proc.kill();
+    // Note: WebContainer API doesn't expose off(), but killing the process
+    // is sufficient — the handler becomes a no-op because urlResolved is true.
+    urlResolved = true;
   };
 }
 
@@ -169,18 +295,34 @@ export async function runProject(
   // 2. Install
   const exitCode = await installDependencies(onOutput);
   if (exitCode !== 0) {
-    throw new Error("npm install failed");
+    throw new Error("npm install failed — check terminal for details");
   }
 
   // 3. Dev server
   let resolveUrl: (url: string) => void;
-  const urlPromise = new Promise<string>((resolve) => {
+  let rejectUrl: (err: Error) => void;
+  const urlPromise = new Promise<string>((resolve, reject) => {
     resolveUrl = resolve;
+    rejectUrl = reject;
   });
 
   const teardown = await startDevServer(onOutput, (url) => {
     resolveUrl!(url);
   });
+
+  // Timeout for server-ready — don't hang forever
+  const serverTimeout = setTimeout(() => {
+    rejectUrl!(
+      new Error(
+        `Dev server did not start within ${SERVER_READY_TIMEOUT_MS / 1000}s`,
+      ),
+    );
+  }, SERVER_READY_TIMEOUT_MS);
+
+  // Clear timeout once URL resolves
+  urlPromise
+    .then(() => clearTimeout(serverTimeout))
+    .catch(() => clearTimeout(serverTimeout));
 
   return { urlPromise, teardown };
 }

@@ -102,7 +102,7 @@ async function withRetry<T>(
       if (isRetryable && attempt < retries) {
         const delay = Math.min(1000 * 2 ** attempt, 8000);
         console.warn(
-          `⏳ Retry ${attempt}/${retries} for Ollama request (waiting ${delay}ms)…`,
+          `[retry] Retry ${attempt}/${retries} for Ollama request (waiting ${delay}ms)...`,
         );
         await new Promise((r) => setTimeout(r, delay));
         continue;
@@ -250,7 +250,7 @@ async function requestStream(
       if (isRetryable && attempt < MAX_RETRIES) {
         const delay = Math.min(1000 * 2 ** attempt, 8000);
         console.warn(
-          `⏳ Stream retry ${attempt}/${MAX_RETRIES} (waiting ${delay}ms)…`,
+          `[retry] Stream retry ${attempt}/${MAX_RETRIES} (waiting ${delay}ms)...`,
         );
         await new Promise((r) => setTimeout(r, delay));
         continue;
@@ -380,7 +380,7 @@ export function handleLLMError(
   err: unknown,
   res: { status: (code: number) => { json: (body: any) => void } },
 ): void {
-  console.error("❌ LLM Error:", err);
+  console.error("[error] LLM Error:", err);
 
   if (isLLMError(err)) {
     res.status(502).json(err);

@@ -65,14 +65,22 @@ const PreviewFrame: React.FC<PreviewFrameProps> = ({
   }, [logs]);
 
   const addLog = useCallback((output: TerminalOutput) => {
+    // Filter out npm spinner frames (single control characters)
+    const stripped = stripAnsi(output.text).trim();
+    if (stripped.length <= 1 && /^[\\|/\-]?$/.test(stripped)) return;
+
     setLogs((prev) => [...prev, output]);
 
-    // Update status based on log content (strip ANSI first)
-    const t = stripAnsi(output.text).toLowerCase();
+    // Update status based on log content
+    const t = stripped.toLowerCase();
     if (t.includes("mounting")) setStatus("mounting");
     else if (t.includes("installing")) setStatus("installing");
     else if (t.includes("starting dev")) setStatus("starting");
-    else if (t.includes("server ready") || t.includes("ready in"))
+    else if (
+      t.includes("server ready") ||
+      t.includes("ready in") ||
+      t.includes("server detected")
+    )
       setStatus("ready");
   }, []);
 
@@ -89,6 +97,7 @@ const PreviewFrame: React.FC<PreviewFrameProps> = ({
 
     // Cleanup previous run
     teardownRef.current?.();
+    teardownRef.current = null;
     setPreviewUrl(null);
     setErrorMsg(null);
     setLogs([]);
@@ -102,8 +111,10 @@ const PreviewFrame: React.FC<PreviewFrameProps> = ({
       setStatus("ready");
     } catch (err) {
       console.error("Preview launch error:", err);
-      setErrorMsg(err instanceof Error ? err.message : String(err));
+      const msg = err instanceof Error ? err.message : String(err);
+      setErrorMsg(msg);
       setStatus("error");
+      addLog({ type: "error", text: `\n[error] ${msg}` });
     }
   }, [fileStructure, addLog]);
 
@@ -123,6 +134,7 @@ const PreviewFrame: React.FC<PreviewFrameProps> = ({
   useEffect(() => {
     return () => {
       teardownRef.current?.();
+      teardownRef.current = null;
     };
   }, []);
 

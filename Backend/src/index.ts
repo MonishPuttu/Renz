@@ -80,7 +80,7 @@ interface ChatRequest {
 // CORS
 // ────────────────────────────────────────────────────────────────
 
-const allowedOrigins = ["http://localhost:5174", "https://renzai.vercel.app"];
+const allowedOrigins = ["http://localhost:5173", "https://renzai.vercel.app"];
 
 const corsOptions: cors.CorsOptions = {
   origin: function (origin, callback) {
@@ -312,11 +312,9 @@ app.post(
     }
 
     if (prompt.length > MAX_PROMPT_LENGTH) {
-      res
-        .status(400)
-        .json({
-          error: `Prompt too long. Maximum ${MAX_PROMPT_LENGTH} characters.`,
-        });
+      res.status(400).json({
+        error: `Prompt too long. Maximum ${MAX_PROMPT_LENGTH} characters.`,
+      });
       return;
     }
 
@@ -398,12 +396,9 @@ app.post(
 
     const session = getSession(sessionId);
     if (!session) {
-      res
-        .status(404)
-        .json({
-          error:
-            "Session not found or expired. Please start a new conversation.",
-        });
+      res.status(404).json({
+        error: "Session not found or expired. Please start a new conversation.",
+      });
       return;
     }
 
@@ -434,11 +429,9 @@ app.post(
     // Validate total message size
     const totalLength = message.reduce((sum, msg) => sum + msg.parts.length, 0);
     if (totalLength > MAX_MESSAGE_PARTS_LENGTH) {
-      res
-        .status(400)
-        .json({
-          error: `Message content too large. Maximum ${MAX_MESSAGE_PARTS_LENGTH} characters total.`,
-        });
+      res.status(400).json({
+        error: `Message content too large. Maximum ${MAX_MESSAGE_PARTS_LENGTH} characters total.`,
+      });
       return;
     }
 
@@ -496,7 +489,7 @@ app.get(
 
       const xmlParser = new StreamingXMLParser();
 
-      console.log("🚀 Starting streaming request to Ollama…");
+      console.log("[stream] Starting streaming request to Ollama...");
 
       let chunkCount = 0;
       let fullResponse = "";
@@ -564,7 +557,7 @@ app.get(
               );
             }
           } catch (chunkError) {
-            console.error("❌ Error processing chunk:", chunkError);
+            console.error("[error] Error processing chunk:", chunkError);
             continue;
           }
         }
@@ -580,7 +573,7 @@ app.get(
       ) {
         continuationCount++;
         console.log(
-          `🔄 Response incomplete — sending continuation ${continuationCount}/${MAX_CONTINUATIONS}…`,
+          `[stream] Response incomplete - sending continuation ${continuationCount}/${MAX_CONTINUATIONS}...`,
         );
 
         // Build continuation messages: original context + what was generated so far + continue instruction
@@ -601,7 +594,7 @@ app.get(
 
       if (continuationCount > 0) {
         console.log(
-          `✅ Completed after ${continuationCount} continuation(s). Total tokens: ${chunkCount}`,
+          `[stream] Completed after ${continuationCount} continuation(s). Total tokens: ${chunkCount}`,
         );
       }
 
@@ -623,7 +616,7 @@ app.get(
       res.write("data: [DONE]\n\n");
       res.end();
     } catch (error) {
-      console.error("❌ Streaming error:", error);
+      console.error("[error] Streaming error:", error);
 
       res.write(
         `data: ${JSON.stringify({
@@ -637,7 +630,7 @@ app.get(
       res.end();
     } finally {
       clearInterval(keepAlive);
-      console.log("🧹 Cleaned up streaming connection");
+      console.log("[cleanup] Cleaned up streaming connection");
     }
   },
 );
@@ -656,14 +649,14 @@ app.get("/health", (req: Request, res: Response) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📡 Health check: http://localhost:${PORT}/health`);
+  console.log(`[server] Running on port ${PORT}`);
+  console.log(`[server] Health check: http://localhost:${PORT}/health`);
   console.log(
-    `🦙 Ollama endpoint: ${process.env.OLLAMA_BASE_URL || "http://localhost:11434"}`,
+    `[server] Ollama endpoint: ${process.env.OLLAMA_BASE_URL || "http://localhost:11434"}`,
   );
   if (!API_KEY) {
     console.warn(
-      "⚠️  No Secret_Api_Key set — API key auth is DISABLED. Set it in .env for production!",
+      "[warn] No Secret_Api_Key set - API key auth is DISABLED. Set it in .env for production!",
     );
   }
 });
