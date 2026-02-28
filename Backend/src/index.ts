@@ -82,6 +82,41 @@ app.use(limiter);
 let lastMessage: ChatMessage[] = [];
 
 // ────────────────────────────────────────────────────────────────
+// Full-response XML parser (fallback for when streaming parser
+// misses artifacts due to character-by-character delivery)
+// ────────────────────────────────────────────────────────────────
+
+function parseFullResponse(
+  text: string,
+): Array<{ title: string; path: string; type: string; code: string }> {
+  const results: Array<{
+    title: string;
+    path: string;
+    type: string;
+    code: string;
+  }> = [];
+
+  const actionRegex =
+    /<boltAction\s+[^>]*?type="file"[^>]*?filePath="([^"]*)"[^>]*>([\s\S]*?)<\/boltAction>/g;
+  let match;
+
+  while ((match = actionRegex.exec(text)) !== null) {
+    const filePath = match[1];
+    const code = match[2].trim();
+    if (filePath && code) {
+      results.push({
+        title: filePath.split("/").pop() || filePath,
+        path: filePath,
+        type: "file",
+        code,
+      });
+    }
+  }
+
+  return results;
+}
+
+// ────────────────────────────────────────────────────────────────
 // Enhanced XML parser for streaming
 // ────────────────────────────────────────────────────────────────
 
@@ -183,8 +218,9 @@ class StreamingXMLParser {
 
 // ────────────────────────────────────────────────────────────────
 // POST /template
-// Analyzes user prompt and returns initial XML build instructions.
-// Route name & response shape unchanged.
+// Lightweight route: detects app type and returns the prompt that
+// the frontend should send to GET /chat for streaming generation.
+// No heavy LLM generation happens here.
 // ────────────────────────────────────────────────────────────────
 
 app.post(
@@ -201,46 +237,33 @@ app.post(
     }
 
     try {
-      // Step 1: Detect app type via Ollama
-      const typeDetectionPrompt = `You must respond with only "react" or "node". Do not explain. User's request: ${prompt}`;
+      // Detect app type via a short Ollama completion
+      const typeDetectionPrompt = `You must respond with EXACTLY one word: either "react" or "node". No explanation, no punctuation, just one word. User's request: ${prompt}`;
       const rawType = await generateCompletion(typeDetectionPrompt);
-      const appType = rawType
-        .trim()
-        .toLowerCase()
-        .replace(/[^a-z]/g, "");
 
-      if (appType !== "react" && appType !== "node") {
-        res.status(403).json({
-          message: "Only React or Node apps are supported.",
-          error: "Unsupported app type",
-        });
-        return;
+      // Extract just a-z chars and check for react/node anywhere in response
+      const cleaned = rawType.trim().toLowerCase().replace(/[^a-z]/g, "");
+      let appType: "react" | "node" = "react"; // default to react
+
+      if (cleaned.includes("node") && !cleaned.includes("react")) {
+        appType = "node";
       }
+      // else default to react (safer default for web apps)
+
+      console.log(
+        `App type detected: "${appType}" (raw LLM: "${rawType.trim()}")`,
+      );
 
       const appPrompt =
         appType === "react"
           ? `${BASE_PROMPT}\nCreate a React application for: ${prompt}`
           : `Create a Node.js application for: ${prompt}`;
 
-      const systemPrompt = getSystemPrompt();
-
-      // Step 2: Generate build instructions via Ollama
-      const fullPrompt = `[SYSTEM]\n${systemPrompt}\n\n[USER]\n${appPrompt}`;
-      const responseText = await generateCompletion(fullPrompt);
-
-      const xmlMatch = responseText.match(
-        /<boltArtifact[^>]*>([\s\S]*?)<\/boltArtifact>/,
-      );
-      console.log("LLM Response:\n", responseText);
-
-      if (!xmlMatch) {
-        res.status(500).json({ error: "Invalid response format from LLM" });
-        return;
-      }
-
+      // Return immediately — no heavy generation here.
+      // The frontend will POST these prompts to /chat and stream via GET /chat.
       res.json({
         prompts: [appPrompt],
-        uiPrompts: [responseText],
+        uiPrompts: [],
       });
       return;
     } catch (err) {
@@ -334,38 +357,65 @@ app.get("/chat", async (req: Request, res: Response): Promise<void> => {
     console.log("🚀 Starting streaming request to Ollama…");
 
     let chunkCount = 0;
+    let fullResponse = "";
+    const emittedPaths = new Set<string>(); // track paths the streaming parser completed
 
     for await (const token of chatWithMemoryStream(messages)) {
       try {
         chunkCount++;
-        console.log(
-          `📦 Processing chunk ${chunkCount}: ${token.length} characters`,
-        );
+        fullResponse += token;
 
         // Parse streaming content through XML parser
         const results = xmlParser.addChunk(token);
 
-        // Send each result to the client
-        for (const result of results) {
-          if (result.type === "chunk") {
-            res.write(
-              `data: ${JSON.stringify({
-                type: "chunk",
-                ...result.data,
-              })}\n\n`,
-            );
-          } else if (result.type === "complete") {
-            res.write(
-              `data: ${JSON.stringify({
-                type: "complete",
-                artifact: result.data,
-              })}\n\n`,
-            );
+        if (results.length > 0) {
+          for (const result of results) {
+            if (result.type === "chunk") {
+              res.write(
+                `data: ${JSON.stringify({
+                  type: "chunk",
+                  ...result.data,
+                })}\n\n`,
+              );
+            } else if (result.type === "complete") {
+              const path =
+                (result.data as any).path || (result.data as any).filePath || "";
+              if (path) emittedPaths.add(path);
+              res.write(
+                `data: ${JSON.stringify({
+                  type: "complete",
+                  artifact: result.data,
+                })}\n\n`,
+              );
+            }
           }
+        } else {
+          // Send raw text token so frontend sees progress
+          res.write(
+            `data: ${JSON.stringify({
+              type: "text",
+              content: token,
+            })}\n\n`,
+          );
         }
       } catch (chunkError) {
         console.error("❌ Error processing chunk:", chunkError);
         continue;
+      }
+    }
+
+    // After streaming is done, parse the full response for any
+    // artifacts the streaming XML parser missed (deduplicate by path)
+    const fullArtifacts = parseFullResponse(fullResponse);
+    for (const artifact of fullArtifacts) {
+      if (!emittedPaths.has(artifact.path)) {
+        emittedPaths.add(artifact.path);
+        res.write(
+          `data: ${JSON.stringify({
+            type: "complete",
+            artifact,
+          })}\n\n`,
+        );
       }
     }
 

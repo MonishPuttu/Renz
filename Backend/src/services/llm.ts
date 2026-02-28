@@ -4,9 +4,8 @@
  * Local Ollama LLM service layer.
  * Provides: generateCompletion, generateStream, chatWithMemory
  *
- * Primary model : llama3:8b
- * Fallback model: mistral:7b
- * Endpoint      : POST http://localhost:11434/api/generate
+ * Model   : llama3:8b
+ * Endpoint: POST http://localhost:11434/api/generate
  */
 
 // ────────────────────────────────────────────────────────────────
@@ -45,10 +44,10 @@ interface OllamaStreamChunk {
 const OLLAMA_BASE_URL = "http://localhost:11434";
 const GENERATE_URL = `${OLLAMA_BASE_URL}/api/generate`;
 
-const PRIMARY_MODEL = "llama3:8b";
-const FALLBACK_MODEL = "mistral:7b";
+const MODEL = "llama3:8b";
 
-const REQUEST_TIMEOUT_MS = 10_000;
+const REQUEST_TIMEOUT_MS = 120_000;
+const STREAM_TIMEOUT_MS = 120_000;
 const MAX_RETRIES = 3;
 const MAX_MEMORY_MESSAGES = 10;
 
@@ -193,31 +192,57 @@ async function requestCompletion(
 
 /**
  * Streaming request against a specific model.
+ * Uses a longer timeout since streams can take a while.
  * Returns the raw Response so the caller can read the body as a stream.
  */
 async function requestStream(prompt: string, model: string): Promise<Response> {
-  return withRetry(async (signal) => {
-    const body: OllamaGenerateRequest = {
-      model,
-      prompt,
-      stream: true,
-    };
+  // Use a longer timeout for stream initiation
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), STREAM_TIMEOUT_MS);
+    try {
+      const body: OllamaGenerateRequest = {
+        model,
+        prompt,
+        stream: true,
+      };
 
-    const res = await fetch(GENERATE_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-      signal,
-    });
+      const res = await fetch(GENERATE_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
 
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      throw new Error(
-        `Ollama returned ${res.status}: ${text || res.statusText}`,
-      );
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        throw new Error(
+          `Ollama returned ${res.status}: ${text || res.statusText}`,
+        );
+      }
+      clearTimeout(timer);
+      return res;
+    } catch (err: unknown) {
+      clearTimeout(timer);
+      const isTimeout =
+        err instanceof DOMException && err.name === "AbortError";
+      const isRetryable =
+        isTimeout ||
+        (err instanceof Error &&
+          /ECONNREFUSED|ECONNRESET|5\d\d/.test(err.message));
+
+      if (isRetryable && attempt < MAX_RETRIES) {
+        const delay = Math.min(1000 * 2 ** attempt, 8000);
+        console.warn(
+          `⏳ Stream retry ${attempt}/${MAX_RETRIES} (waiting ${delay}ms)…`,
+        );
+        await new Promise((r) => setTimeout(r, delay));
+        continue;
+      }
+      throw err;
     }
-    return res;
-  });
+  }
+  throw new Error("Max retries exceeded for stream");
 }
 
 // ────────────────────────────────────────────────────────────────
@@ -225,36 +250,24 @@ async function requestStream(prompt: string, model: string): Promise<Response> {
 // ────────────────────────────────────────────────────────────────
 
 /**
- * Generate a non-streaming completion with automatic fallback.
- *
- * Tries PRIMARY_MODEL first (with retries), then falls back to
- * FALLBACK_MODEL. Throws a normalised LLMError if both fail.
+ * Generate a non-streaming completion.
+ * Retries up to MAX_RETRIES on transient failures.
  */
 export async function generateCompletion(prompt: string): Promise<string> {
   try {
-    return await requestCompletion(prompt, PRIMARY_MODEL);
-  } catch (primaryErr) {
-    console.warn(
-      `⚠️  Primary model (${PRIMARY_MODEL}) failed, attempting fallback (${FALLBACK_MODEL})…`,
-    );
-    try {
-      return await requestCompletion(prompt, FALLBACK_MODEL);
-    } catch (fallbackErr) {
-      const err = normaliseLLMError(fallbackErr, FALLBACK_MODEL);
-      err.retriesExhausted = true;
-      throw err;
-    }
+    return await requestCompletion(prompt, MODEL);
+  } catch (err) {
+    const llmErr = normaliseLLMError(err, MODEL);
+    llmErr.retriesExhausted = true;
+    throw llmErr;
   }
 }
 
 /**
- * Generate a streaming completion with automatic fallback.
+ * Generate a streaming completion.
+ * Retries up to MAX_RETRIES on transient failures.
  *
- * Tries PRIMARY_MODEL first (with retries), then falls back to
- * FALLBACK_MODEL.
- *
- * The caller receives an async generator that yields text tokens
- * one at a time. An error is thrown if both models fail.
+ * Returns an async generator that yields text tokens.
  */
 export async function* generateStream(
   prompt: string,
@@ -262,18 +275,11 @@ export async function* generateStream(
   let res: Response;
 
   try {
-    res = await requestStream(prompt, PRIMARY_MODEL);
-  } catch {
-    console.warn(
-      `⚠️  Primary model (${PRIMARY_MODEL}) streaming failed, attempting fallback (${FALLBACK_MODEL})…`,
-    );
-    try {
-      res = await requestStream(prompt, FALLBACK_MODEL);
-    } catch (fallbackErr) {
-      const err = normaliseLLMError(fallbackErr, FALLBACK_MODEL);
-      err.retriesExhausted = true;
-      throw err;
-    }
+    res = await requestStream(prompt, MODEL);
+  } catch (err) {
+    const llmErr = normaliseLLMError(err, MODEL);
+    llmErr.retriesExhausted = true;
+    throw llmErr;
   }
 
   if (!res.body) {
