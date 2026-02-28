@@ -1,5 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { ChevronRight, ChevronDown, File, Folder, FolderOpen } from 'lucide-react';
+import React, { useState, useEffect } from "react";
+import {
+  ChevronRight,
+  ChevronDown,
+  File,
+  Folder,
+  FolderOpen,
+} from "lucide-react";
 
 export interface FileStructure {
   [key: string]: string | FileStructure;
@@ -19,25 +25,28 @@ interface FileNode {
   children?: FileNode[];
 }
 
-const FileExplorer: React.FC<FileExplorerProps> = ({ 
-  fileStructure, 
-  onFileSelect, 
-  selectedFilePath 
+const FileExplorer: React.FC<FileExplorerProps> = ({
+  fileStructure,
+  onFileSelect,
+  selectedFilePath,
 }) => {
-  const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set(['']));
+  const [expandedPaths, setExpandedPaths] = useState<Set<string>>(
+    new Set([""]),
+  );
 
   // Auto-expand parent directories when a file is selected
   useEffect(() => {
     if (selectedFilePath) {
-      const pathParts = selectedFilePath.split('/').filter(Boolean);
+      const pathParts = selectedFilePath.split("/").filter(Boolean);
       const newExpanded = new Set(expandedPaths);
-      
-      let currentPath = '';
-      for (const part of pathParts.slice(0, -1)) { // Exclude the file itself
-        currentPath += (currentPath ? '/' : '') + part;
+
+      let currentPath = "";
+      for (const part of pathParts.slice(0, -1)) {
+        // Exclude the file itself
+        currentPath += (currentPath ? "/" : "") + part;
         newExpanded.add(currentPath);
       }
-      
+
       setExpandedPaths(newExpanded);
     }
   }, [selectedFilePath]);
@@ -52,19 +61,22 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
     setExpandedPaths(newExpanded);
   };
 
-  const buildFileTree = (structure: FileStructure, parentPath = ''): FileNode[] => {
-    if (!structure || typeof structure !== 'object') return [];
+  const buildFileTree = (
+    structure: FileStructure,
+    parentPath = "",
+  ): FileNode[] => {
+    if (!structure || typeof structure !== "object") return [];
 
     return Object.entries(structure).map(([name, value]) => {
       const fullPath = parentPath ? `${parentPath}/${name}` : name;
-      
-      if (typeof value === 'string') {
+
+      if (typeof value === "string") {
         // It's a file
         return {
           name,
           path: fullPath,
           isFile: true,
-          content: value
+          content: value,
         };
       } else {
         // It's a directory
@@ -72,7 +84,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
           name,
           path: fullPath,
           isFile: false,
-          children: buildFileTree(value, fullPath)
+          children: buildFileTree(value, fullPath),
         };
       }
     });
@@ -89,15 +101,16 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
           <div
             className={`
               flex items-center py-1 px-2 rounded cursor-pointer transition-colors duration-150
-              ${isSelected 
-                ? 'bg-amber-500/10 text-amber-400 border-l-2 border-amber-500' 
-                : 'text-zinc-300 hover:bg-zinc-800/50 hover:text-white'
+              ${
+                isSelected
+                  ? "bg-amber-500/10 text-amber-400 border-l-2 border-amber-500"
+                  : "text-zinc-300 hover:bg-zinc-800/50 hover:text-white"
               }
             `}
             style={{ paddingLeft: `${indent + 8}px` }}
             onClick={() => {
               if (node.isFile) {
-                onFileSelect(node.content || '', node.path);
+                onFileSelect(node.content || "", node.path);
               } else {
                 toggleExpand(node.path);
               }
@@ -112,7 +125,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
                 )}
               </div>
             )}
-            
+
             <div className="w-4 h-4 mr-2 flex items-center justify-center">
               {node.isFile ? (
                 <File className="w-3 h-3 text-zinc-500" />
@@ -122,14 +135,12 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
                 <Folder className="w-3 h-3 text-amber-500" />
               )}
             </div>
-            
+
             <span className="text-sm truncate">{node.name}</span>
           </div>
-          
+
           {!node.isFile && isExpanded && node.children && (
-            <div>
-              {renderFileTree(node.children, depth + 1)}
-            </div>
+            <div>{renderFileTree(node.children, depth + 1)}</div>
           )}
         </div>
       );
@@ -146,9 +157,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
           <p>No files to display</p>
         </div>
       ) : (
-        <div className="space-y-1">
-          {renderFileTree(fileTree)}
-        </div>
+        <div className="space-y-1">{renderFileTree(fileTree)}</div>
       )}
     </div>
   );

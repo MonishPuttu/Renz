@@ -305,8 +305,6 @@ function LandingPage() {
               ))}
             </div>
           </div>
-
-
         </div>
       </main>
     </div>

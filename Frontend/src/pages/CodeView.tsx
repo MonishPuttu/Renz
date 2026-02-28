@@ -542,8 +542,12 @@ function BuildView() {
             onClick={() => navigate("/")}
             className="flex items-center gap-2.5 hover:opacity-80 transition-opacity duration-200"
           >
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-amber-400 via-orange-500 to-red-500 flex items-center justify-center font-bold text-xs text-black">R</div>
-            <span className="font-semibold text-lg tracking-tight bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">Renz</span>
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-amber-400 via-orange-500 to-red-500 flex items-center justify-center font-bold text-xs text-black">
+              R
+            </div>
+            <span className="font-semibold text-lg tracking-tight bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">
+              Renz
+            </span>
           </button>
           <MessageSquare className="w-4 h-4 text-zinc-600" />
         </div>
