@@ -41,10 +41,10 @@ interface OllamaStreamChunk {
 // Constants
 // ────────────────────────────────────────────────────────────────
 
-const OLLAMA_BASE_URL = "http://localhost:11434";
+const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
 const GENERATE_URL = `${OLLAMA_BASE_URL}/api/generate`;
 
-const MODEL = "llama3:8b";
+const MODEL = process.env.OLLAMA_MODEL || "llama3:8b";
 
 const REQUEST_TIMEOUT_MS = 120_000;
 const STREAM_TIMEOUT_MS = 120_000;

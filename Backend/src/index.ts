@@ -1,4 +1,5 @@
 require("dotenv").config();
+import crypto from "crypto";
 import express, { Request, Response, NextFunction } from "express";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
@@ -16,7 +17,43 @@ import {
 // ────────────────────────────────────────────────────────────────
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: "100kb" }));
+
+// ────────────────────────────────────────────────────────────────
+// API key authentication middleware
+// ────────────────────────────────────────────────────────────────
+
+const API_KEY = process.env.Secret_Api_Key;
+
+function authMiddleware(req: Request, res: Response, next: NextFunction): void {
+  // Skip auth if no API key is configured (development mode)
+  if (!API_KEY) {
+    next();
+    return;
+  }
+
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  // Also accept ?apiKey= query param (needed for EventSource which can't set headers)
+  const queryKey = req.query.apiKey as string | undefined;
+
+  const providedKey = token || queryKey;
+
+  if (!providedKey || providedKey !== API_KEY) {
+    res.status(401).json({ error: "Unauthorized: invalid or missing API key" });
+    return;
+  }
+
+  next();
+}
+
+// ────────────────────────────────────────────────────────────────
+// Input validation constants
+// ────────────────────────────────────────────────────────────────
+
+const MAX_PROMPT_LENGTH = 4000;
+const MAX_MESSAGE_PARTS_LENGTH = 50000; // generous for follow-ups with file context
+const SESSION_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
 // ────────────────────────────────────────────────────────────────
 // Request / response types (unchanged shapes)
@@ -76,10 +113,42 @@ const limiter = rateLimit({
 app.use(limiter);
 
 // ────────────────────────────────────────────────────────────────
-// In-memory conversation store (short-term memory)
+// Per-session conversation store (prevents cross-user data leaks)
 // ────────────────────────────────────────────────────────────────
 
-let lastMessage: ChatMessage[] = [];
+interface Session {
+  messages: ChatMessage[];
+  createdAt: number;
+}
+
+const sessions = new Map<string, Session>();
+
+/** Generate a cryptographically random session ID */
+function createSessionId(): string {
+  return crypto.randomBytes(24).toString("hex");
+}
+
+/** Get or validate a session */
+function getSession(sessionId: string): Session | null {
+  const session = sessions.get(sessionId);
+  if (!session) return null;
+  // Expire stale sessions
+  if (Date.now() - session.createdAt > SESSION_TTL_MS) {
+    sessions.delete(sessionId);
+    return null;
+  }
+  return session;
+}
+
+/** Periodic cleanup of expired sessions (every 5 minutes) */
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, session] of sessions) {
+    if (now - session.createdAt > SESSION_TTL_MS) {
+      sessions.delete(id);
+    }
+  }
+}, 5 * 60 * 1000);
 
 // ────────────────────────────────────────────────────────────────
 // Full-response XML parser (fallback for when streaming parser
@@ -225,14 +294,20 @@ class StreamingXMLParser {
 
 app.post(
   "/template",
+  authMiddleware,
   async (
     req: Request<{}, TemplateResponse, TemplateRequest>,
-    res: Response<TemplateResponse | { error: string; message?: string }>,
+    res: Response<TemplateResponse | { error: string; message?: string; sessionId?: string }>,
   ): Promise<void> => {
     const { prompt } = req.body;
 
     if (!prompt || typeof prompt !== "string") {
       res.status(400).json({ error: "Invalid prompt, expected a string" });
+      return;
+    }
+
+    if (prompt.length > MAX_PROMPT_LENGTH) {
+      res.status(400).json({ error: `Prompt too long. Maximum ${MAX_PROMPT_LENGTH} characters.` });
       return;
     }
 
@@ -266,11 +341,16 @@ app.post(
           ? `${BASE_PROMPT}\nCreate a React application for: ${prompt}`
           : `Create a Node.js application for: ${prompt}`;
 
+      // Create a new session for this conversation
+      const sessionId = createSessionId();
+      sessions.set(sessionId, { messages: [], createdAt: Date.now() });
+
       // Return immediately — no heavy generation here.
       // The frontend will POST these prompts to /chat and stream via GET /chat.
       res.json({
         prompts: [appPrompt],
         uiPrompts: [],
+        sessionId,
       });
       return;
     } catch (err) {
@@ -289,11 +369,23 @@ app.post(
 
 app.post(
   "/chat",
+  authMiddleware,
   async (
-    req: Request<{}, { success: boolean } | { error: string }, ChatRequest>,
+    req: Request<{}, { success: boolean } | { error: string }, ChatRequest & { sessionId?: string }>,
     res: Response,
   ): Promise<void> => {
-    const { message } = req.body;
+    const { message, sessionId } = req.body as ChatRequest & { sessionId?: string };
+
+    if (!sessionId || typeof sessionId !== "string") {
+      res.status(400).json({ error: "Missing or invalid sessionId" });
+      return;
+    }
+
+    const session = getSession(sessionId);
+    if (!session) {
+      res.status(404).json({ error: "Session not found or expired. Please start a new conversation." });
+      return;
+    }
 
     if (!Array.isArray(message)) {
       res
@@ -319,7 +411,14 @@ app.post(
       return;
     }
 
-    lastMessage = message;
+    // Validate total message size
+    const totalLength = message.reduce((sum, msg) => sum + msg.parts.length, 0);
+    if (totalLength > MAX_MESSAGE_PARTS_LENGTH) {
+      res.status(400).json({ error: `Message content too large. Maximum ${MAX_MESSAGE_PARTS_LENGTH} characters total.` });
+      return;
+    }
+
+    session.messages = message;
     res.status(200).json({ success: true });
     return;
   },
@@ -331,16 +430,23 @@ app.post(
 // as SSE events through the XML parser. Uses conversation memory.
 // ────────────────────────────────────────────────────────────────
 
-app.get("/chat", async (req: Request, res: Response): Promise<void> => {
-  if (!lastMessage.length) {
-    res.status(400).json({ error: "No message to process." });
+app.get("/chat", authMiddleware, async (req: Request, res: Response): Promise<void> => {
+  const sessionId = req.query.sessionId as string;
+
+  if (!sessionId) {
+    res.status(400).json({ error: "Missing sessionId query parameter" });
+    return;
+  }
+
+  const session = getSession(sessionId);
+  if (!session || !session.messages.length) {
+    res.status(400).json({ error: "No message to process or session expired." });
     return;
   }
 
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
-  res.setHeader("Access-Control-Allow-Origin", "*");
 
   // Keep connection alive
   const keepAlive = setInterval(() => {
@@ -351,7 +457,7 @@ app.get("/chat", async (req: Request, res: Response): Promise<void> => {
     // Build conversation messages for memory-based streaming
     const messages: LLMChatMessage[] = [
       { role: "system", content: getSystemPrompt() },
-      ...lastMessage.map(
+      ...session.messages.map(
         (msg): LLMChatMessage => ({
           role: "user",
           content: msg.parts,
@@ -451,7 +557,7 @@ app.get("/chat", async (req: Request, res: Response): Promise<void> => {
       // Build continuation messages: original context + what was generated so far + continue instruction
       const continuationMessages: LLMChatMessage[] = [
         { role: "system", content: getSystemPrompt() },
-        ...lastMessage.map(
+        ...session.messages.map(
           (msg): LLMChatMessage => ({
             role: "user",
             content: msg.parts,
@@ -522,5 +628,8 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📡 Health check: http://localhost:${PORT}/health`);
-  console.log(`🦙 Ollama endpoint: http://localhost:11434`);
+  console.log(`🦙 Ollama endpoint: ${process.env.OLLAMA_BASE_URL || "http://localhost:11434"}`);
+  if (!API_KEY) {
+    console.warn("⚠️  No Secret_Api_Key set — API key auth is DISABLED. Set it in .env for production!");
+  }
 });

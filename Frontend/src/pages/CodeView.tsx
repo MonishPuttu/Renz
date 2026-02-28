@@ -23,9 +23,19 @@ import PreviewFrame from "../components/PreviewFrame";
 import { useNavigate } from "react-router-dom";
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
+const API_KEY = import.meta.env.VITE_API_KEY || "";
 
 if (!BACKEND_URL) {
   console.error("Missing VITE_BACKEND_URL, check your environment variables.");
+}
+
+/** Build common axios headers with API key auth */
+function authHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {};
+  if (API_KEY) {
+    headers["Authorization"] = `Bearer ${API_KEY}`;
+  }
+  return headers;
 }
 
 // ────────────────────────────────────────────────────────────────
@@ -106,6 +116,8 @@ function BuildView() {
 
   // Keep initial prompts for follow-up context
   const initialPromptsRef = useRef<string[]>([]);
+  // Session ID for this conversation
+  const sessionIdRef = useRef<string>("");
   // Track active EventSource so we can close it on cleanup
   const eventSourceRef = useRef<EventSource | null>(null);
   // Stable refs for streaming handlers — avoids re-creating startStreaming
@@ -283,7 +295,12 @@ function BuildView() {
     // Close any previous connection
     eventSourceRef.current?.close();
 
-    const es = new EventSource(`${BACKEND_URL}/chat`);
+    const sseUrl = new URL(`${BACKEND_URL}/chat`);
+    sseUrl.searchParams.set("sessionId", sessionIdRef.current);
+    if (API_KEY) {
+      sseUrl.searchParams.set("apiKey", API_KEY);
+    }
+    const es = new EventSource(sseUrl.toString());
     eventSourceRef.current = es;
 
     setStreamingState((prev) => ({ ...prev, isStreaming: true }));
@@ -390,16 +407,19 @@ function BuildView() {
         const response = await axios.post<TemplateResponse>(
           `${BACKEND_URL}/template`,
           { prompt: prompt.trim() },
+          { headers: authHeaders() },
         );
 
-        const { prompts } = response.data;
+        const { prompts, sessionId } = response.data;
         initialPromptsRef.current = prompts;
+        sessionIdRef.current = sessionId;
 
         await axios.post(`${BACKEND_URL}/chat`, {
+          sessionId,
           message: [...prompts, prompt].map(
             (content: string): ChatMsg => ({ parts: content }),
           ),
-        });
+        }, { headers: authHeaders() });
 
         startStreaming();
       } catch (err) {
@@ -458,10 +478,11 @@ function BuildView() {
       allParts.push(text);
 
       await axios.post(`${BACKEND_URL}/chat`, {
+        sessionId: sessionIdRef.current,
         message: allParts.map(
           (content: string): ChatMsg => ({ parts: content }),
         ),
-      });
+      }, { headers: authHeaders() });
 
       startStreaming();
     } catch (err) {

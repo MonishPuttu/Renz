@@ -7,6 +7,7 @@ export interface BuildStep {
 
 export interface TemplateResponse {
   prompts: string[];
+  sessionId: string;
 }
 
 export interface ChatMessage {
