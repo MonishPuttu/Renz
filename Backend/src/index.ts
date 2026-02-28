@@ -242,7 +242,10 @@ app.post(
       const rawType = await generateCompletion(typeDetectionPrompt);
 
       // Extract just a-z chars and check for react/node anywhere in response
-      const cleaned = rawType.trim().toLowerCase().replace(/[^a-z]/g, "");
+      const cleaned = rawType
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z]/g, "");
       let appType: "react" | "node" = "react"; // default to react
 
       if (cleaned.includes("node") && !cleaned.includes("react")) {
@@ -379,7 +382,9 @@ app.get("/chat", async (req: Request, res: Response): Promise<void> => {
               );
             } else if (result.type === "complete") {
               const path =
-                (result.data as any).path || (result.data as any).filePath || "";
+                (result.data as any).path ||
+                (result.data as any).filePath ||
+                "";
               if (path) emittedPaths.add(path);
               res.write(
                 `data: ${JSON.stringify({

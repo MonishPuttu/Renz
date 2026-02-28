@@ -434,9 +434,7 @@ function BuildView() {
       const allParts: string[] = [...initialPromptsRef.current];
       chatMessages.forEach((msg) => {
         allParts.push(
-          msg.role === "user"
-            ? msg.content
-            : "[Previous assistant response]",
+          msg.role === "user" ? msg.content : "[Previous assistant response]",
         );
       });
       allParts.push(text);
@@ -587,9 +585,7 @@ function BuildView() {
             <button
               type="submit"
               disabled={
-                !chatInput.trim() ||
-                isSendingChat ||
-                streamingState.isStreaming
+                !chatInput.trim() || isSendingChat || streamingState.isStreaming
               }
               className="p-2 bg-yellow-600 rounded-lg hover:bg-yellow-700 transition disabled:opacity-40 disabled:cursor-not-allowed"
             >
