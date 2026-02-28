@@ -1,11 +1,26 @@
 require("dotenv").config();
-import express, { Request, Response } from "express";
+import express, { Request, Response, NextFunction } from "express";
 import cors from "cors";
-import OpenAI from "openai";
+import rateLimit from "express-rate-limit";
 import { BASE_PROMPT, getSystemPrompt } from "./Prompts";
+import {
+  generateCompletion,
+  generateStream,
+  chatWithMemoryStream,
+  handleLLMError,
+  ChatMessage as LLMChatMessage,
+} from "./services/llm";
+
+// ────────────────────────────────────────────────────────────────
+// Express app
+// ────────────────────────────────────────────────────────────────
 
 const app = express();
 app.use(express.json());
+
+// ────────────────────────────────────────────────────────────────
+// Request / response types (unchanged shapes)
+// ────────────────────────────────────────────────────────────────
 
 interface TemplateRequest {
   prompt: string;
@@ -24,9 +39,12 @@ interface ChatRequest {
   message: ChatMessage[];
 }
 
+// ────────────────────────────────────────────────────────────────
+// CORS
+// ────────────────────────────────────────────────────────────────
+
 const allowedOrigins = ["http://localhost:5174", "https://renzai.vercel.app"];
 
-// CORS setup
 const corsOptions: cors.CorsOptions = {
   origin: function (origin, callback) {
     if (!origin || allowedOrigins.includes(origin)) {
@@ -43,57 +61,33 @@ const corsOptions: cors.CorsOptions = {
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
 
-// Validate OpenRouter API key
-if (!process.env.OPENROUTER_API_KEY) {
-  console.error("Missing OPENROUTER_API_KEY in environment.");
-  process.exit(1);
-}
+// ────────────────────────────────────────────────────────────────
+// Rate limiting — 30 requests / minute / IP
+// ────────────────────────────────────────────────────────────────
 
-const openai = new OpenAI({
-  baseURL: "https://openrouter.ai/api/v1",
-  apiKey: process.env.OPENROUTER_API_KEY,
+const limiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests, please try again later." },
 });
 
-const MODEL = "mistralai/mistral-7b-instruct";
-const REQUEST_TIMEOUT_MS = 10_000;
-const MAX_RETRIES = 3;
+app.use(limiter);
 
-/**
- * Retry wrapper for 429 (rate-limit) errors with exponential backoff.
- * Also enforces a per-request timeout via AbortController.
- */
-async function withRetry<T>(
-  fn: (signal: AbortSignal) => Promise<T>,
-): Promise<T> {
-  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-    try {
-      const result = await fn(controller.signal);
-      return result;
-    } catch (err: any) {
-      if (err?.status === 429 && attempt < MAX_RETRIES) {
-        const delay = Math.min(1000 * 2 ** attempt, 8000);
-        console.warn(
-          `⏳ Rate-limited (429). Retrying in ${delay}ms (attempt ${attempt}/${MAX_RETRIES})...`,
-        );
-        await new Promise((r) => setTimeout(r, delay));
-        continue;
-      }
-      throw err;
-    } finally {
-      clearTimeout(timer);
-    }
-  }
-  throw new Error("Max retries exceeded");
-}
+// ────────────────────────────────────────────────────────────────
+// In-memory conversation store (short-term memory)
+// ────────────────────────────────────────────────────────────────
 
-let lastMessage: { parts: string }[] = [];
+let lastMessage: ChatMessage[] = [];
 
+// ────────────────────────────────────────────────────────────────
 // Enhanced XML parser for streaming
+// ────────────────────────────────────────────────────────────────
+
 class StreamingXMLParser {
   private buffer = "";
-  private currentArtifact: any = null;
+  private currentArtifact: Record<string, string> | null = null;
   private insideArtifact = false;
   private currentContent = "";
 
@@ -102,7 +96,10 @@ class StreamingXMLParser {
 
   addChunk(chunk: string) {
     this.buffer += chunk;
-    const results: Array<{ type: "chunk" | "complete"; data: any }> = [];
+    const results: Array<{
+      type: "chunk" | "complete";
+      data: Record<string, unknown>;
+    }> = [];
 
     if (!this.insideArtifact) {
       const startMatch = this.buffer.match(this.artifactStartRegex);
@@ -135,7 +132,7 @@ class StreamingXMLParser {
             data: {
               event: "content_chunk",
               content: contentUpToEnd,
-              artifact: this.currentArtifact,
+              artifact: this.currentArtifact!,
             },
           });
         }
@@ -143,7 +140,7 @@ class StreamingXMLParser {
         results.push({
           type: "complete",
           data: {
-            ...this.currentArtifact,
+            ...this.currentArtifact!,
             code: this.currentContent + contentUpToEnd,
           },
         });
@@ -159,7 +156,7 @@ class StreamingXMLParser {
             data: {
               event: "content_chunk",
               content: this.buffer,
-              artifact: this.currentArtifact,
+              artifact: this.currentArtifact!,
             },
           });
           this.currentContent += this.buffer;
@@ -184,10 +181,12 @@ class StreamingXMLParser {
   }
 }
 
-/**
- * POST /template
- * Analyzes user prompt and returns initial XML build instructions
- */
+// ────────────────────────────────────────────────────────────────
+// POST /template
+// Analyzes user prompt and returns initial XML build instructions.
+// Route name & response shape unchanged.
+// ────────────────────────────────────────────────────────────────
+
 app.post(
   "/template",
   async (
@@ -202,27 +201,13 @@ app.post(
     }
 
     try {
-      // Step 1: Detect app type
-      const detectTypeResponse = await withRetry((signal) =>
-        openai.chat.completions.create(
-          {
-            model: MODEL,
-            messages: [
-              {
-                role: "user",
-                content: `You must respond with only "react" or "node". Do not explain. User's request: ${prompt}`,
-              },
-            ],
-            max_tokens: 10,
-            temperature: 0,
-          },
-          { signal },
-        ),
-      );
-
-      const appType =
-        detectTypeResponse.choices[0]?.message?.content?.trim().toLowerCase() ??
-        "";
+      // Step 1: Detect app type via Ollama
+      const typeDetectionPrompt = `You must respond with only "react" or "node". Do not explain. User's request: ${prompt}`;
+      const rawType = await generateCompletion(typeDetectionPrompt);
+      const appType = rawType
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z]/g, "");
 
       if (appType !== "react" && appType !== "node") {
         res.status(403).json({
@@ -239,23 +224,10 @@ app.post(
 
       const systemPrompt = getSystemPrompt();
 
-      // Step 2: Generate build instructions
-      const appResponse = await withRetry((signal) =>
-        openai.chat.completions.create(
-          {
-            model: MODEL,
-            messages: [
-              { role: "system", content: systemPrompt },
-              { role: "user", content: appPrompt },
-            ],
-            max_tokens: 8192,
-            temperature: 0.7,
-          },
-          { signal },
-        ),
-      );
+      // Step 2: Generate build instructions via Ollama
+      const fullPrompt = `[SYSTEM]\n${systemPrompt}\n\n[USER]\n${appPrompt}`;
+      const responseText = await generateCompletion(fullPrompt);
 
-      const responseText = appResponse.choices[0]?.message?.content ?? "";
       const xmlMatch = responseText.match(
         /<boltArtifact[^>]*>([\s\S]*?)<\/boltArtifact>/,
       );
@@ -273,16 +245,18 @@ app.post(
       return;
     } catch (err) {
       console.error("Error in /template:", err);
-      res.status(500).json({ error: "LLM generation failed." });
+      handleLLMError(err, res);
       return;
     }
   },
 );
 
-/**
- * POST /chat
- * Stores incoming user message to use in GET /chat
- */
+// ────────────────────────────────────────────────────────────────
+// POST /chat
+// Accepts user messages and stores them for GET /chat streaming.
+// Route name & request/response shape unchanged.
+// ────────────────────────────────────────────────────────────────
+
 app.post(
   "/chat",
   async (
@@ -321,7 +295,12 @@ app.post(
   },
 );
 
-// Enhanced streaming endpoint
+// ────────────────────────────────────────────────────────────────
+// GET /chat
+// Streaming endpoint — reads lastMessage, streams Ollama tokens
+// as SSE events through the XML parser. Uses conversation memory.
+// ────────────────────────────────────────────────────────────────
+
 app.get("/chat", async (req: Request, res: Response): Promise<void> => {
   if (!lastMessage.length) {
     res.status(400).json({ error: "No message to process." });
@@ -339,11 +318,12 @@ app.get("/chat", async (req: Request, res: Response): Promise<void> => {
   }, 15000);
 
   try {
-    const messages: OpenAI.ChatCompletionMessageParam[] = [
+    // Build conversation messages for memory-based streaming
+    const messages: LLMChatMessage[] = [
       { role: "system", content: getSystemPrompt() },
       ...lastMessage.map(
-        (msg): OpenAI.ChatCompletionMessageParam => ({
-          role: "user" as const,
+        (msg): LLMChatMessage => ({
+          role: "user",
           content: msg.parts,
         }),
       ),
@@ -351,40 +331,23 @@ app.get("/chat", async (req: Request, res: Response): Promise<void> => {
 
     const xmlParser = new StreamingXMLParser();
 
-    console.log("🚀 Starting enhanced streaming request to OpenRouter...");
-
-    const stream = await withRetry((signal) =>
-      openai.chat.completions.create(
-        {
-          model: MODEL,
-          messages,
-          max_tokens: 8192,
-          temperature: 0.7,
-          stream: true,
-        },
-        { signal },
-      ),
-    );
+    console.log("🚀 Starting streaming request to Ollama…");
 
     let chunkCount = 0;
 
-    for await (const chunk of stream) {
+    for await (const token of chatWithMemoryStream(messages)) {
       try {
-        const text = chunk.choices[0]?.delta?.content;
-        if (!text) continue;
-
         chunkCount++;
         console.log(
-          `📦 Processing chunk ${chunkCount}: ${text.length} characters`,
+          `📦 Processing chunk ${chunkCount}: ${token.length} characters`,
         );
 
-        // Parse streaming content
-        const results = xmlParser.addChunk(text);
+        // Parse streaming content through XML parser
+        const results = xmlParser.addChunk(token);
 
         // Send each result to the client
         for (const result of results) {
           if (result.type === "chunk") {
-            // Send incremental updates
             res.write(
               `data: ${JSON.stringify({
                 type: "chunk",
@@ -392,7 +355,6 @@ app.get("/chat", async (req: Request, res: Response): Promise<void> => {
               })}\n\n`,
             );
           } else if (result.type === "complete") {
-            // Send complete artifact
             res.write(
               `data: ${JSON.stringify({
                 type: "complete",
@@ -401,9 +363,6 @@ app.get("/chat", async (req: Request, res: Response): Promise<void> => {
             );
           }
         }
-
-        // Add small delay to make streaming more visible
-        await new Promise((resolve) => setTimeout(resolve, 50));
       } catch (chunkError) {
         console.error("❌ Error processing chunk:", chunkError);
         continue;
@@ -431,14 +390,21 @@ app.get("/chat", async (req: Request, res: Response): Promise<void> => {
   }
 });
 
-// Health check endpoint
+// ────────────────────────────────────────────────────────────────
+// Health check
+// ────────────────────────────────────────────────────────────────
+
 app.get("/health", (req: Request, res: Response) => {
   res.json({ status: "OK", timestamp: new Date().toISOString() });
 });
 
-// Start the server
+// ────────────────────────────────────────────────────────────────
+// Start server
+// ────────────────────────────────────────────────────────────────
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📡 Health check: http://localhost:${PORT}/health`);
+  console.log(`🦙 Ollama endpoint: http://localhost:11434`);
 });
