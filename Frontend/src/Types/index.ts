@@ -1,16 +1,32 @@
 export interface BuildStep {
   title: string;
-  status: 'pending' | 'in-progress' | 'completed';
-  code?: string;
-  path?: string;
+  status: 'completed' | 'pending' | 'error' | 'in-progress';
+  code: string;
+  path: string;
 }
 
+export interface TemplateResponse {
+  prompts: string[];
+}
+
+export interface ChatMessage {
+  parts: string;
+}
+
+export interface SSEData {
+  xml?: string;
+}
+
+export interface FileStructure {
+  [key: string]: string | FileStructure;
+}
+
+// Step types for the XML parser
 export enum StepType {
-  CreateFile,
-  CreateFolder,
-  EditFile,
-  DeleteFile,
-  RunScript
+  CreateFolder = 'create-folder',
+  CreateFile = 'create-file',
+  RunScript = 'run-script',
+  InstallDependencies = 'install-dependencies'
 }
 
 export interface Step {
@@ -18,7 +34,18 @@ export interface Step {
   title: string;
   description: string;
   type: StepType;
-  status: 'pending' | 'in-progress' | 'completed';
+  status: 'pending' | 'in-progress' | 'completed' | 'error';
   code?: string;
   path?: string;
 }
+
+export interface StreamingChunkData {
+  type: 'chunk';
+  event: 'artifact_start' | 'content_chunk';
+  content?: string;
+  artifact?: {
+    title: string;
+    path: string;
+    type: string;
+  };
+}  
