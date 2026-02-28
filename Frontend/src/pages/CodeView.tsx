@@ -58,13 +58,23 @@ interface ConversationMessage {
 
 /** Strip XML / bolt tags from assistant text for clean display */
 function stripXmlTags(text: string): string {
-  return text
-    .replace(/<boltArtifact[^>]*>/g, "")
-    .replace(/<\/boltArtifact>/g, "")
-    .replace(/<boltAction[^>]*>/g, "")
-    .replace(/<\/boltAction>/g, "")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+  return (
+    text
+      // Complete tags with content between them
+      .replace(/<boltArtifact[^>]*>[\s\S]*?<\/boltArtifact>/g, "")
+      .replace(/<boltAction[^>]*>[\s\S]*?<\/boltAction>/g, "")
+      // Self-closing or incomplete tags (no closing > yet during streaming)
+      .replace(/<boltArtifact[^>]*\/?>/g, "")
+      .replace(/<\/boltArtifact>/g, "")
+      .replace(/<boltAction[^>]*\/?>/g, "")
+      .replace(/<\/boltAction>/g, "")
+      // Partial opening tags at the end of streamed text (not yet closed with >)
+      .replace(/<boltArtifact[^>]*$/g, "")
+      .replace(/<boltAction[^>]*$/g, "")
+      // Collapse excessive blank lines and trim
+      .replace(/\n{3,}/g, "\n\n")
+      .trim()
+  );
 }
 
 // ────────────────────────────────────────────────────────────────
@@ -430,13 +440,21 @@ function BuildView() {
     ]);
 
     try {
-      // Build full conversation context
+      // Build follow-up context: system prompt context + summary of current files + user's request
       const allParts: string[] = [...initialPromptsRef.current];
-      chatMessages.forEach((msg) => {
+
+      // Include the current generated files so the LLM knows what exists
+      const currentFiles = Object.values(streamingState.files)
+        .filter((f) => f.content && f.isComplete)
+        .map((f) => `File: ${f.path}\n\`\`\`\n${f.content}\n\`\`\``)
+        .join("\n\n");
+
+      if (currentFiles) {
         allParts.push(
-          msg.role === "user" ? msg.content : "[Previous assistant response]",
+          `Here are the current project files that were previously generated:\n\n${currentFiles}\n\nThe user wants the following changes:`,
         );
-      });
+      }
+
       allParts.push(text);
 
       await axios.post(`${BACKEND_URL}/chat`, {

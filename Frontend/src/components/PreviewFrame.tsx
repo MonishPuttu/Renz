@@ -67,12 +67,12 @@ const PreviewFrame: React.FC<PreviewFrameProps> = ({
   const addLog = useCallback((output: TerminalOutput) => {
     setLogs((prev) => [...prev, output]);
 
-    // Update status based on log content
-    const t = output.text.toLowerCase();
+    // Update status based on log content (strip ANSI first)
+    const t = stripAnsi(output.text).toLowerCase();
     if (t.includes("mounting")) setStatus("mounting");
     else if (t.includes("installing")) setStatus("installing");
     else if (t.includes("starting dev")) setStatus("starting");
-    else if (t.includes("server ready")) setStatus("ready");
+    else if (t.includes("server ready") || t.includes("ready in")) setStatus("ready");
   }, []);
 
   const launch = useCallback(async () => {
@@ -259,7 +259,7 @@ const PreviewFrame: React.FC<PreviewFrameProps> = ({
                       : "text-gray-300"
               }`}
             >
-              {log.text}
+              {stripAnsi(log.text)}
             </div>
           ))}
           <div ref={logsEndRef} />
@@ -272,6 +272,12 @@ const PreviewFrame: React.FC<PreviewFrameProps> = ({
 // ────────────────────────────────────────────
 // Helpers
 // ────────────────────────────────────────────
+
+/** Strip ANSI escape codes from terminal output */
+function stripAnsi(text: string): string {
+  // eslint-disable-next-line no-control-regex
+  return text.replace(/\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g, "");
+}
 
 function hasNestedPackageJson(structure: FileStructure): boolean {
   for (const value of Object.values(structure)) {

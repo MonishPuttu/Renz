@@ -2,7 +2,7 @@ require("dotenv").config();
 import express, { Request, Response, NextFunction } from "express";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
-import { BASE_PROMPT, getSystemPrompt } from "./Prompts";
+import { BASE_PROMPT, getSystemPrompt, CONTINUE_PROMPT } from "./Prompts";
 import {
   generateCompletion,
   generateStream,
@@ -239,7 +239,11 @@ app.post(
     try {
       // Detect app type via a short Ollama completion
       const typeDetectionPrompt = `You must respond with EXACTLY one word: either "react" or "node". No explanation, no punctuation, just one word. User's request: ${prompt}`;
-      const rawType = await generateCompletion(typeDetectionPrompt);
+      const rawType = await generateCompletion(typeDetectionPrompt, {
+        num_predict: 10,   // only need a single word back
+        num_ctx: 2048,     // small context is fine for this
+        temperature: 0.1,  // deterministic
+      });
 
       // Extract just a-z chars and check for react/node anywhere in response
       const cleaned = rawType
@@ -363,50 +367,107 @@ app.get("/chat", async (req: Request, res: Response): Promise<void> => {
     let fullResponse = "";
     const emittedPaths = new Set<string>(); // track paths the streaming parser completed
 
-    for await (const token of chatWithMemoryStream(messages)) {
-      try {
-        chunkCount++;
-        fullResponse += token;
+    // Maximum continuation attempts to prevent infinite loops
+    const MAX_CONTINUATIONS = 3;
+    let continuationCount = 0;
 
-        // Parse streaming content through XML parser
-        const results = xmlParser.addChunk(token);
+    /**
+     * Checks whether the response looks incomplete
+     * (opened a <boltArtifact> but never closed it).
+     */
+    function isResponseIncomplete(text: string): boolean {
+      const openTags = (text.match(/<boltArtifact\b/g) || []).length;
+      const closeTags = (text.match(/<\/boltArtifact>/g) || []).length;
+      return openTags > closeTags;
+    }
 
-        if (results.length > 0) {
-          for (const result of results) {
-            if (result.type === "chunk") {
-              res.write(
-                `data: ${JSON.stringify({
-                  type: "chunk",
-                  ...result.data,
-                })}\n\n`,
-              );
-            } else if (result.type === "complete") {
-              const path =
-                (result.data as any).path ||
-                (result.data as any).filePath ||
-                "";
-              if (path) emittedPaths.add(path);
-              res.write(
-                `data: ${JSON.stringify({
-                  type: "complete",
-                  artifact: result.data,
-                })}\n\n`,
-              );
+    /**
+     * Stream tokens from the given async generator, accumulating into fullResponse
+     * and routing through the XML parser + SSE writer.
+     */
+    async function streamTokens(
+      tokenSource: AsyncGenerator<string, void, undefined>,
+    ) {
+      for await (const token of tokenSource) {
+        try {
+          chunkCount++;
+          fullResponse += token;
+
+          // Parse streaming content through XML parser
+          const results = xmlParser.addChunk(token);
+
+          if (results.length > 0) {
+            for (const result of results) {
+              if (result.type === "chunk") {
+                res.write(
+                  `data: ${JSON.stringify({
+                    type: "chunk",
+                    ...result.data,
+                  })}\n\n`,
+                );
+              } else if (result.type === "complete") {
+                const path =
+                  (result.data as any).path ||
+                  (result.data as any).filePath ||
+                  "";
+                if (path) emittedPaths.add(path);
+                res.write(
+                  `data: ${JSON.stringify({
+                    type: "complete",
+                    artifact: result.data,
+                  })}\n\n`,
+                );
+              }
             }
+          } else {
+            // Send raw text token so frontend sees progress
+            res.write(
+              `data: ${JSON.stringify({
+                type: "text",
+                content: token,
+              })}\n\n`,
+            );
           }
-        } else {
-          // Send raw text token so frontend sees progress
-          res.write(
-            `data: ${JSON.stringify({
-              type: "text",
-              content: token,
-            })}\n\n`,
-          );
+        } catch (chunkError) {
+          console.error("❌ Error processing chunk:", chunkError);
+          continue;
         }
-      } catch (chunkError) {
-        console.error("❌ Error processing chunk:", chunkError);
-        continue;
       }
+    }
+
+    // Initial streaming pass
+    await streamTokens(chatWithMemoryStream(messages));
+
+    // Auto-continuation: if the response is incomplete, send CONTINUE_PROMPT
+    while (
+      isResponseIncomplete(fullResponse) &&
+      continuationCount < MAX_CONTINUATIONS
+    ) {
+      continuationCount++;
+      console.log(
+        `🔄 Response incomplete — sending continuation ${continuationCount}/${MAX_CONTINUATIONS}…`,
+      );
+
+      // Build continuation messages: original context + what was generated so far + continue instruction
+      const continuationMessages: LLMChatMessage[] = [
+        { role: "system", content: getSystemPrompt() },
+        ...lastMessage.map(
+          (msg): LLMChatMessage => ({
+            role: "user",
+            content: msg.parts,
+          }),
+        ),
+        { role: "assistant", content: fullResponse },
+        { role: "user", content: CONTINUE_PROMPT },
+      ];
+
+      await streamTokens(chatWithMemoryStream(continuationMessages));
+    }
+
+    if (continuationCount > 0) {
+      console.log(
+        `✅ Completed after ${continuationCount} continuation(s). Total tokens: ${chunkCount}`,
+      );
     }
 
     // After streaming is done, parse the full response for any

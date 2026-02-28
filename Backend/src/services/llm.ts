@@ -51,6 +51,15 @@ const STREAM_TIMEOUT_MS = 120_000;
 const MAX_RETRIES = 3;
 const MAX_MEMORY_MESSAGES = 10;
 
+// Ollama generation options
+// num_ctx  : context window (llama3:8b supports 8192 natively; default is only 2048!)
+// num_predict: max tokens to generate (-1 = unlimited until EOS/context full)
+const DEFAULT_OPTIONS: Record<string, unknown> = {
+  num_ctx: 8192,
+  num_predict: 8192,
+  temperature: 0.7,
+};
+
 // ────────────────────────────────────────────────────────────────
 // Helpers
 // ────────────────────────────────────────────────────────────────
@@ -162,12 +171,14 @@ function safeParse<T = OllamaStreamChunk>(raw: string): T | null {
 async function requestCompletion(
   prompt: string,
   model: string,
+  options?: Record<string, unknown>,
 ): Promise<string> {
   return withRetry(async (signal) => {
     const body: OllamaGenerateRequest = {
       model,
       prompt,
       stream: false,
+      options: { ...DEFAULT_OPTIONS, ...options },
     };
 
     const res = await fetch(GENERATE_URL, {
@@ -195,7 +206,11 @@ async function requestCompletion(
  * Uses a longer timeout since streams can take a while.
  * Returns the raw Response so the caller can read the body as a stream.
  */
-async function requestStream(prompt: string, model: string): Promise<Response> {
+async function requestStream(
+  prompt: string,
+  model: string,
+  options?: Record<string, unknown>,
+): Promise<Response> {
   // Use a longer timeout for stream initiation
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     const controller = new AbortController();
@@ -205,6 +220,7 @@ async function requestStream(prompt: string, model: string): Promise<Response> {
         model,
         prompt,
         stream: true,
+        options: { ...DEFAULT_OPTIONS, ...options },
       };
 
       const res = await fetch(GENERATE_URL, {
@@ -253,9 +269,12 @@ async function requestStream(prompt: string, model: string): Promise<Response> {
  * Generate a non-streaming completion.
  * Retries up to MAX_RETRIES on transient failures.
  */
-export async function generateCompletion(prompt: string): Promise<string> {
+export async function generateCompletion(
+  prompt: string,
+  options?: Record<string, unknown>,
+): Promise<string> {
   try {
-    return await requestCompletion(prompt, MODEL);
+    return await requestCompletion(prompt, MODEL, options);
   } catch (err) {
     const llmErr = normaliseLLMError(err, MODEL);
     llmErr.retriesExhausted = true;
@@ -271,11 +290,12 @@ export async function generateCompletion(prompt: string): Promise<string> {
  */
 export async function* generateStream(
   prompt: string,
+  options?: Record<string, unknown>,
 ): AsyncGenerator<string, void, undefined> {
   let res: Response;
 
   try {
-    res = await requestStream(prompt, MODEL);
+    res = await requestStream(prompt, MODEL, options);
   } catch (err) {
     const llmErr = normaliseLLMError(err, MODEL);
     llmErr.retriesExhausted = true;
