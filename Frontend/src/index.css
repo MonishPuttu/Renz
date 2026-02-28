@@ -1,3 +1,150 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ===== Aurora background animations ===== */
+@keyframes aurora-1 {
+  0%, 100% {
+    opacity: 0.4;
+    transform: translateX(-50%) scale(1) translateY(0);
+  }
+  33% {
+    opacity: 0.7;
+    transform: translateX(-50%) scale(1.15) translateY(-20px);
+  }
+  66% {
+    opacity: 0.5;
+    transform: translateX(-50%) scale(1.05) translateY(10px);
+  }
+}
+
+@keyframes aurora-2 {
+  0%, 100% {
+    opacity: 0.3;
+    transform: translateX(0) translateY(0);
+  }
+  50% {
+    opacity: 0.6;
+    transform: translateX(40px) translateY(-30px);
+  }
+}
+
+@keyframes aurora-3 {
+  0%, 100% {
+    opacity: 0.2;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(1.2);
+  }
+}
+
+.animate-aurora-1 {
+  animation: aurora-1 12s ease-in-out infinite;
+}
+
+.animate-aurora-2 {
+  animation: aurora-2 15s ease-in-out infinite;
+}
+
+.animate-aurora-3 {
+  animation: aurora-3 10s ease-in-out infinite;
+}
+
+/* ===== Floating particles ===== */
+@keyframes float-particle {
+  0% {
+    transform: translateY(0) translateX(0);
+    opacity: 0;
+  }
+  10% {
+    opacity: var(--tw-opacity, 0.15);
+  }
+  90% {
+    opacity: var(--tw-opacity, 0.15);
+  }
+  100% {
+    transform: translateY(-100vh) translateX(40px);
+    opacity: 0;
+  }
+}
+
+.animate-float-particle {
+  animation: float-particle linear infinite;
+}
+
+/* ===== Staggered entrance animations ===== */
+@keyframes stagger-in {
+  0% {
+    opacity: 0;
+    transform: translateY(24px);
+    filter: blur(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+.animate-stagger-1 { animation: stagger-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.1s both; }
+.animate-stagger-2 { animation: stagger-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.25s both; }
+.animate-stagger-3 { animation: stagger-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.4s both; }
+.animate-stagger-4 { animation: stagger-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.55s both; }
+.animate-stagger-5 { animation: stagger-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.7s both; }
+.animate-stagger-6 { animation: stagger-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.85s both; }
+.animate-stagger-7 { animation: stagger-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) 1.0s both; }
+
+/* ===== Nav slide down ===== */
+@keyframes slide-down {
+  0% {
+    opacity: 0;
+    transform: translateY(-16px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-down {
+  animation: slide-down 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0s both;
+}
+
+/* ===== Blinking cursor ===== */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.animate-blink {
+  animation: blink 0.8s ease-in-out infinite;
+}
+
+/* ===== Gradient text shimmer ===== */
+@keyframes gradient-x {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.animate-gradient-x {
+  animation: gradient-x 4s ease infinite;
+}
+
+/* ===== Fade in up (badge) ===== */
+@keyframes fade-in-up {
+  0% {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.8s ease-out forwards;
+}
