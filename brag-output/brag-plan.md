@@ -25,3 +25,15 @@
 | 4 | 11.9–15.8 | **Run** | Preview tab: WebContainer boot + npm install/dev → the Kanban app; a card is dragged across — "Then runs it — right in your browser." |
 | 5 | 15.8–18.4 | **Iterate** | "Keep chatting. It keeps building." + tech chips |
 | 6 | 18.4–21.0 | **Outro** | Logo + "Idea to app in seconds." + renzai.vercel.app |
+
+## Voice-over version (39s)
+The final `brag.mp4` is the extended cut with narration. Voice: Kokoro TTS (`af_heart`), generated locally. Each scene's timeline was stretched to fit its line (entrances and transitions keep their original speed; only the hold in the middle of each scene slows down), the soundtrack was re-timed to match, and the music ducks under the voice. Some spellings below are written for the voice, e.g. "Ani-Talk", "R-x Check".
+
+| # | Time | Narration |
+|---|------|-----------|
+| 1 | 0.0–3.6s | What do you want to build today? |
+| 2 | 3.6–10.5s | With Renz, you don't start from a blank project. You just describe it. Say, a Kanban board, like Trello. |
+| 3 | 10.5–17.5s | An AI model plans the project, and streams the code, file by file, into a real code editor. |
+| 4 | 17.5–26.8s | Then a WebContainer installs the dependencies and starts the dev server, so your app runs live, right in the browser. No local setup. |
+| 5 | 26.8–32.9s | Want changes? Keep chatting in the sidebar, and Renz keeps building on the same project. |
+| 6 | 32.9–38.7s | Renz. Idea to app, in seconds. Try the live demo today. |
