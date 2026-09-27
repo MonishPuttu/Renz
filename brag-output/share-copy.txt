@@ -1,0 +1,1 @@
+Type "Create a Kanban board like Trello" and watch Renz write the React code file by file, boot it in a WebContainer and hand you a live preview — no local setup. Idea to app in seconds: https://renzai.vercel.app
