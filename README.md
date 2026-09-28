@@ -1,5 +1,14 @@
 # Renz
 
+<!-- brag:start -->
+<p align="center">
+  <a href="brag-output/brag.mp4"><img src="brag-output/brag.gif" alt="Renz launch video" width="100%"></a>
+  <br>
+  <sub>▶ <a href="brag-output/brag.mp4"><b>Watch the full launch video with voice-over</b></a> (38s, sound on)</sub>
+</p>
+<!-- brag:end -->
+
+
 > An interactive full-stack playground that lets you build a **React frontend** and **Node.js backend** and **preview the output instantly in the browser**
 
 With Renz, you can iterate on frontend and backend code together and see live results without switching tools or setting up local environments.
